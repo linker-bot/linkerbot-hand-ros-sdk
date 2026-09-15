@@ -7,16 +7,22 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 import rclpy
-from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.lifecycle import TransitionCallbackReturn
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.validate_namespace import InvalidNamespaceException, validate_namespace
 
-from .node import LinkerbotHandNode
+from .node import (
+    CALLBACK_GROUPS_PER_HAND,
+    LinkerbotHandNode,
+    spin_until_shutdown,
+)
 
 CONTAINER_NODE_NAME = "linkerbot_hand_container"
 EXECUTOR_SHUTDOWN_TIMEOUT_S = 2.0
+# The container node only serves parameters, from its default callback group.
+CONTAINER_CALLBACK_GROUPS = 1
 
 
 class ManagedHandNode(Protocol):
@@ -209,13 +215,17 @@ def main(args: list[str] | None = None) -> None:
     container: MultiHandContainerNode | None = None
     nodes: tuple[ManagedHandNode, ...] = ()
     lifecycle: HandLifecycleGroup | None = None
-    executor: SingleThreadedExecutor | None = None
+    executor: MultiThreadedExecutor | None = None
     try:
         container = MultiHandContainerNode()
         configuration = container.read_configuration()
         nodes = create_hand_nodes(configuration)
         lifecycle = HandLifecycleGroup(nodes)
-        executor = SingleThreadedExecutor()
+        executor = MultiThreadedExecutor(
+            num_threads=(
+                CONTAINER_CALLBACK_GROUPS + CALLBACK_GROUPS_PER_HAND * len(nodes)
+            )
+        )
         executor.add_node(container)
         for node in nodes:
             executor.add_node(node)
@@ -225,7 +235,7 @@ def main(args: list[str] | None = None) -> None:
             f"running {len(nodes)} hand lifecycle nodes in one process: "
             f"{', '.join(configuration.device_namespaces)}"
         )
-        executor.spin()
+        spin_until_shutdown(executor, container.get_logger())
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
@@ -274,6 +284,8 @@ def _log_cleanup_error(logger: ErrorLogger | None, message: str) -> None:
 
 
 __all__ = [
+    "CALLBACK_GROUPS_PER_HAND",
+    "CONTAINER_CALLBACK_GROUPS",
     "CONTAINER_NODE_NAME",
     "EXECUTOR_SHUTDOWN_TIMEOUT_S",
     "HandLifecycleGroup",

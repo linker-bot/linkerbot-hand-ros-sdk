@@ -11,6 +11,16 @@ section.
 Unreleased
 ----------
 
+* A slow management read no longer stalls the rest of the process. Both entry
+  points now spin a multi-threaded executor, so a blocking
+  ``~/get_device_info``, ``~/get_stall_protection`` or ``~/recover`` on one hand
+  no longer stops commands, diagnostics or lifecycle work on any other hand in
+  the same process.
+
+* Cleanup now waits for in-flight service and diagnostic callbacks before
+  destroying the entities they use, and a response that still loses that race is
+  logged instead of ending the process.
+
 * ``tag`` now creates the Gitea Release as well, so a release is a signed tag
   plus a Release and nothing else. Creating it was the step ``v2.0.0`` missed
   even after everything else was repaired, leaving it the only tag in this

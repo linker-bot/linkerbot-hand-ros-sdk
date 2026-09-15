@@ -52,17 +52,42 @@ def test_production_entry_points_keep_default_rclpy_signal_handling() -> None:
         assert "SignalHandlerOptions.NO" not in source
 
 
-def test_driver_entry_points_use_single_threaded_executors() -> None:
-    sources = tuple(
-        (PACKAGE_ROOT / path).read_text(encoding="utf-8")
-        for path in (
-            "linkerbot_hand_ros/node.py",
-            "linkerbot_hand_ros/multi_device.py",
-        )
+def test_driver_entry_points_spin_multi_threaded_and_tolerate_destroyed_entities():
+    node_source = (PACKAGE_ROOT / "linkerbot_hand_ros/node.py").read_text(
+        encoding="utf-8"
+    )
+    multi_source = (PACKAGE_ROOT / "linkerbot_hand_ros/multi_device.py").read_text(
+        encoding="utf-8"
     )
 
-    assert all("SingleThreadedExecutor" in source for source in sources)
-    assert all("MultiThreadedExecutor" not in source for source in sources)
+    for source in (node_source, multi_source):
+        assert "SingleThreadedExecutor" not in source
+        main = _function_definition(source, "main")
+        constructed = {
+            call.func.id
+            for call in ast.walk(main)
+            if isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+        }
+        methods = {
+            call.func.attr
+            for call in ast.walk(main)
+            if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
+        }
+        assert "MultiThreadedExecutor" in constructed
+        # A destroyed entity must not end the process for every other hand, so
+        # no entry point calls spin() directly.
+        assert "spin_until_shutdown" in constructed
+        assert "spin" not in methods
+
+    assert "num_threads=CALLBACK_GROUPS_PER_HAND" in node_source
+    assert "CALLBACK_GROUPS_PER_HAND * len(nodes)" in multi_source
+
+
+def _function_definition(source: str, name: str) -> ast.FunctionDef:
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return node
+    raise AssertionError(f"{name} is not defined at module level")
 
 
 def test_launch_exposes_every_driver_parameter() -> None:

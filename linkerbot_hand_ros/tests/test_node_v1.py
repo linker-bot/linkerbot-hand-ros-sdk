@@ -20,7 +20,7 @@ from linkerbot_hand import (
     UnsupportedFirmwareError,
 )
 from linkerbot_hand_ros.command_interface import CommandInterface
-from linkerbot_hand_ros.node import LinkerbotHandNode
+from linkerbot_hand_ros.node import CALLBACK_GROUPS_PER_HAND, LinkerbotHandNode
 from rclpy.lifecycle import TransitionCallbackReturn
 from rclpy.parameter import Parameter
 
@@ -143,6 +143,9 @@ def test_executor_owned_entities_use_isolated_callback_groups(node_rig):
     assert all(group is not node.default_callback_group for group in observation_groups)
     groups = (commands._callback_group, *observation_groups)
     assert len({id(group) for group in groups}) == len(groups)
+    # The executor sizes its thread pool from this count, so it must track the
+    # groups a hand actually owns.
+    assert CALLBACK_GROUPS_PER_HAND == len(groups)
     assert (
         interfaces.capability_timer.callback_group
         is interfaces._capability_callback_group

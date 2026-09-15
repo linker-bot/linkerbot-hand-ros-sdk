@@ -50,6 +50,31 @@ def test_device_info_read_runs_on_admin_worker(active_node):
     assert threading.current_thread().name != "linkerbot_hand-admin"
 
 
+def test_services_report_not_ready_once_the_gate_closes(active_node):
+    node, builder = active_node
+    interfaces = node._interfaces
+    interfaces._gate.close(0.5)
+
+    # Raising here would skip the response rclpy sends after the callback returns
+    # and end spin(), so a closed gate must answer instead.
+    read = interfaces.management._get_device_info(
+        GetDeviceInfo.Request(timeout_s=0.2),
+        GetDeviceInfo.Response(),
+    )
+    submitted = interfaces.management._submit_discrete(
+        DiscreteOperation.CLEAR_FAULTS,
+        SubmitCommand.Request(),
+        SubmitCommand.Response(),
+    )
+
+    assert not read.success
+    assert read.error_code == ErrorCode.DEVICE_NOT_READY.value
+    assert not submitted.accepted
+    assert submitted.error_code == ErrorCode.DEVICE_NOT_READY.value
+    assert builder.latest_runtime.device_info_threads == []
+    assert builder.latest_runtime.operations == []
+
+
 def test_recover_service_preserves_stable_error_fields(active_node):
     node, builder = active_node
     success = node._interfaces.management._recover(

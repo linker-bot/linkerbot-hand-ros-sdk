@@ -33,6 +33,7 @@ from linkerbot_hand_msgs.srv import (
 )
 
 from .admin_worker import AdminWorker
+from .callback_gate import CallbackGate
 from .command_router import (
     DiscreteOperation,
     RoutedCommand,
@@ -61,15 +62,19 @@ class ManagementInterface:
         track: Callable[[RoutedCommand, float | None], None],
         shutdown_timeout_s: float,
         worker_capacity: int,
+        gate: CallbackGate,
     ) -> None:
         if not isinstance(capabilities, DeviceCapabilities):
             raise TypeError("capabilities must be DeviceCapabilities")
+        if not isinstance(gate, CallbackGate):
+            raise TypeError("gate must be CallbackGate")
         self._node = node
         self._capabilities = capabilities
         self._device = device
         self._is_active = is_active
         self._track = track
         self._shutdown_timeout_s = shutdown_timeout_s
+        self._gate = gate
         self._worker = AdminWorker(
             capacity=worker_capacity,
             name=f"{node.get_name()}-admin",
@@ -169,72 +174,75 @@ class ManagementInterface:
         request: GetDeviceInfo.Request,
         response: GetDeviceInfo.Response,
     ) -> GetDeviceInfo.Response:
-        if not self._require_active(response):
+        with self._gate.admit() as admitted:
+            if not self._require_ready(admitted, response):
+                return response
+            try:
+                timeout = self._request_timeout(request.timeout_s)
+                info = self._worker.call(
+                    "get_device_info",
+                    lambda: self._device().get_device_info(timeout),
+                    timeout_s=_worker_timeout(timeout),
+                )
+                response.success = True
+                response.info = device_info_to_message(
+                    info,
+                    ros_now_ns=self._node.get_clock().now().nanoseconds,
+                )
+                response.message = "device information refreshed"
+            except Exception as error:
+                _set_failure(response, error)
             return response
-        try:
-            timeout = self._request_timeout(request.timeout_s)
-            info = self._worker.call(
-                "get_device_info",
-                lambda: self._device().get_device_info(timeout),
-                timeout_s=_worker_timeout(timeout),
-            )
-            response.success = True
-            response.info = device_info_to_message(
-                info,
-                ros_now_ns=self._node.get_clock().now().nanoseconds,
-            )
-            response.message = "device information refreshed"
-        except Exception as error:
-            _set_failure(response, error)
-        return response
 
     def _get_stall_protection(
         self,
         request: GetStallProtection.Request,
         response: GetStallProtection.Response,
     ) -> GetStallProtection.Response:
-        if not self._require_active(response):
+        with self._gate.admit() as admitted:
+            if not self._require_ready(admitted, response):
+                return response
+            try:
+                timeout = self._request_timeout(request.timeout_s)
+                snapshot = self._worker.call(
+                    "get_stall_protection",
+                    lambda: self._read_stall_protection(timeout),
+                    timeout_s=_worker_timeout(timeout),
+                )
+                message = stall_protection_to_message(
+                    snapshot,
+                    self._device().get_capabilities(),
+                    ros_now_ns=self._node.get_clock().now().nanoseconds,
+                )
+                if message is None:
+                    raise RuntimeError("stall protection cache is unavailable")
+                response.success = True
+                response.state = message
+                response.message = "stall protection refreshed"
+            except Exception as error:
+                _set_failure(response, error)
             return response
-        try:
-            timeout = self._request_timeout(request.timeout_s)
-            snapshot = self._worker.call(
-                "get_stall_protection",
-                lambda: self._read_stall_protection(timeout),
-                timeout_s=_worker_timeout(timeout),
-            )
-            message = stall_protection_to_message(
-                snapshot,
-                self._device().get_capabilities(),
-                ros_now_ns=self._node.get_clock().now().nanoseconds,
-            )
-            if message is None:
-                raise RuntimeError("stall protection cache is unavailable")
-            response.success = True
-            response.state = message
-            response.message = "stall protection refreshed"
-        except Exception as error:
-            _set_failure(response, error)
-        return response
 
     def _recover(
         self,
         request: Recover.Request,
         response: Recover.Response,
     ) -> Recover.Response:
-        if not self._require_active(response):
+        with self._gate.admit() as admitted:
+            if not self._require_ready(admitted, response):
+                return response
+            try:
+                timeout = self._request_timeout(request.timeout_s)
+                self._worker.call(
+                    "recover",
+                    lambda: self._device().recover(timeout),
+                    timeout_s=_worker_timeout(timeout),
+                )
+                response.success = True
+                response.message = "identity-verified recovery completed"
+            except Exception as error:
+                _set_failure(response, error)
             return response
-        try:
-            timeout = self._request_timeout(request.timeout_s)
-            self._worker.call(
-                "recover",
-                lambda: self._device().recover(timeout),
-                timeout_s=_worker_timeout(timeout),
-            )
-            response.success = True
-            response.message = "identity-verified recovery completed"
-        except Exception as error:
-            _set_failure(response, error)
-        return response
 
     def _set_raw_values(
         self,
@@ -243,25 +251,26 @@ class ManagementInterface:
         response: SetRawValues.Response,
     ) -> SetRawValues.Response:
         driver_received_at = time.monotonic()
-        if not self._require_active(response, accepted_field=True):
+        with self._gate.admit() as admitted:
+            if not self._require_ready(admitted, response, accepted_field=True):
+                return response
+            try:
+                routed = route_raw_command(
+                    self._device(),
+                    _STALL_SETTERS[name],
+                    HandRawCommand(
+                        user_sequence=request.user_sequence,
+                        raw=request.raw,
+                    ),
+                    require_client_id=False,
+                )
+                self._track(routed, driver_received_at)
+                response.accepted = True
+                response.command_id = routed.handle.command_id
+                response.message = "command accepted; delivery is asynchronous"
+            except Exception as error:
+                _set_failure(response, error, accepted_field=True)
             return response
-        try:
-            routed = route_raw_command(
-                self._device(),
-                _STALL_SETTERS[name],
-                HandRawCommand(
-                    user_sequence=request.user_sequence,
-                    raw=request.raw,
-                ),
-                require_client_id=False,
-            )
-            self._track(routed, driver_received_at)
-            response.accepted = True
-            response.command_id = routed.handle.command_id
-            response.message = "command accepted; delivery is asynchronous"
-        except Exception as error:
-            _set_failure(response, error, accepted_field=True)
-        return response
 
     def _submit_discrete(
         self,
@@ -270,17 +279,18 @@ class ManagementInterface:
         response: SubmitCommand.Response,
     ) -> SubmitCommand.Response:
         driver_received_at = time.monotonic()
-        if not self._require_active(response, accepted_field=True):
+        with self._gate.admit() as admitted:
+            if not self._require_ready(admitted, response, accepted_field=True):
+                return response
+            try:
+                routed = route_discrete_operation(self._device(), operation)
+                self._track(routed, driver_received_at)
+                response.accepted = True
+                response.command_id = routed.handle.command_id
+                response.message = "command accepted; delivery is asynchronous"
+            except Exception as error:
+                _set_failure(response, error, accepted_field=True)
             return response
-        try:
-            routed = route_discrete_operation(self._device(), operation)
-            self._track(routed, driver_received_at)
-            response.accepted = True
-            response.command_id = routed.handle.command_id
-            response.message = "command accepted; delivery is asynchronous"
-        except Exception as error:
-            _set_failure(response, error, accepted_field=True)
-        return response
 
     def _read_stall_protection(self, timeout_s: float) -> HandSnapshot:
         deadline = time.monotonic() + timeout_s
@@ -314,13 +324,16 @@ class ManagementInterface:
             )
         return timeout
 
-    def _require_active(
+    def _require_ready(
         self,
+        admitted: bool,
         response: Any,
         *,
         accepted_field: bool = False,
     ) -> bool:
-        if self._is_active():
+        """Reject work the gate refused or the lifecycle no longer accepts."""
+
+        if admitted and self._is_active():
             return True
         if accepted_field:
             response.accepted = False

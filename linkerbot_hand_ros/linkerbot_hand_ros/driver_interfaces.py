@@ -20,6 +20,7 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.lifecycle import LifecycleNode
 
 from .cache_change_worker import CacheChangeWorker
+from .callback_gate import CallbackGate
 from .command_interface import CommandInterface
 from .diagnostics import build_diagnostic_status
 from .driver_config import DriverConfiguration
@@ -52,6 +53,9 @@ class DriverInterfaces:
         self._metrics = DriverMetrics()
         self._capability_callback_group = MutuallyExclusiveCallbackGroup()
         self._diagnostic_callback_group = MutuallyExclusiveCallbackGroup()
+        # Callbacks outside the lifecycle control group run concurrently with
+        # lifecycle transitions, so they must be drained before destruction.
+        self._gate = CallbackGate(name=f"{node.get_name()}-callbacks")
         self.snapshot: SnapshotPublisher | None = None
         self.commands: CommandInterface | None = None
         self.management: ManagementInterface | None = None
@@ -205,16 +209,17 @@ class DriverInterfaces:
     def publish_runtime_capabilities(self) -> None:
         """Republish zero-I/O SDK capability changes such as firmware fallback."""
 
-        if not self._is_active():
-            return
-        try:
-            capabilities = self._device().get_capabilities()
-            self._require_snapshot().publish_capabilities_if_changed(capabilities)
-        except Exception as error:
-            self._node.get_logger().error(
-                f"capability publication failed: {self._error_text(error)}",
-                throttle_duration_sec=5.0,
-            )
+        with self._gate.admit() as admitted:
+            if not admitted or not self._is_active():
+                return
+            try:
+                capabilities = self._device().get_capabilities()
+                self._require_snapshot().publish_capabilities_if_changed(capabilities)
+            except Exception as error:
+                self._node.get_logger().error(
+                    f"capability publication failed: {self._error_text(error)}",
+                    throttle_duration_sec=5.0,
+                )
 
     def publish_command_status(self) -> None:
         if not self._is_active() or self.commands is None:
@@ -230,24 +235,25 @@ class DriverInterfaces:
     def publish_diagnostics(self) -> None:
         """Publish diagnostics from ``get_health()`` and no other SDK state call."""
 
-        if self.diagnostic_publisher is None:
-            return
-        try:
-            status = build_diagnostic_status(
-                node_name=self._node.get_fully_qualified_name(),
-                model=self._configuration.model,
-                active=self._is_active(),
-                health=self._device().get_health(),
-            )
-            message = DiagnosticArray()
-            message.header.stamp = self._node.get_clock().now().to_msg()
-            message.status = [status]
-            self.diagnostic_publisher.publish(message)
-        except Exception as error:
-            self._node.get_logger().error(
-                f"diagnostic publication failed: {self._error_text(error)}",
-                throttle_duration_sec=5.0,
-            )
+        with self._gate.admit() as admitted:
+            if not admitted or self.diagnostic_publisher is None:
+                return
+            try:
+                status = build_diagnostic_status(
+                    node_name=self._node.get_fully_qualified_name(),
+                    model=self._configuration.model,
+                    active=self._is_active(),
+                    health=self._device().get_health(),
+                )
+                message = DiagnosticArray()
+                message.header.stamp = self._node.get_clock().now().to_msg()
+                message.status = [status]
+                self.diagnostic_publisher.publish(message)
+            except Exception as error:
+                self._node.get_logger().error(
+                    f"diagnostic publication failed: {self._error_text(error)}",
+                    throttle_duration_sec=5.0,
+                )
 
     def cancel_active_timers(self) -> None:
         errors: list[BaseException] = []
@@ -283,6 +289,18 @@ class DriverInterfaces:
             )
         except BaseException as error:
             errors.append(error)
+        try:
+            self._gate.close(self._configuration.device_config.shutdown_timeout_s)
+        except BaseException as error:
+            # Destroying an entity a callback still uses lets rclpy re-raise
+            # InvalidHandle out of spin() and end the process. Keeping the
+            # entities and reporting the failure leaves the process serving.
+            errors.append(error)
+            raise LifecycleError(
+                "in-flight ROS callbacks did not finish; entities were kept alive",
+                operation="destroy_ros_interfaces",
+                cause=errors[0],
+            ) from error
         for timer_name in (
             "capability_timer",
             "diagnostic_timer",
@@ -339,6 +357,7 @@ class DriverInterfaces:
             track=self._require_commands().track,
             shutdown_timeout_s=self._configuration.device_config.shutdown_timeout_s,
             worker_capacity=(self._configuration.device_config.discrete_queue_capacity),
+            gate=self._gate,
         )
         self.diagnostic_publisher = self._node.create_publisher(
             DiagnosticArray,

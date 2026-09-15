@@ -6,12 +6,17 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Protocol
 
 import rclpy
 from linkerbot_hand import HandDevice, HandError
 from rcl_interfaces.msg import SetParametersResult
-from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
+from rclpy.exceptions import InvalidHandle
+from rclpy.executors import (
+    Executor,
+    ExternalShutdownException,
+    MultiThreadedExecutor,
+)
 from rclpy.lifecycle import LifecycleNode, LifecycleState, TransitionCallbackReturn
 from rclpy.parameter import Parameter
 
@@ -25,6 +30,12 @@ from .parameter_updates import declare_driver_parameters, prepare_parameter_upda
 from .transport_factory import create_hand_device
 
 DeviceFactory = Callable[[DriverConfiguration], HandDevice]
+
+# One thread per mutually exclusive callback group of a hand node: the lifecycle
+# control group shared by transitions and commands, plus the management,
+# capability and diagnostic groups. A management service occupies its own group
+# while the SDK answers, so every other group needs a thread of its own.
+CALLBACK_GROUPS_PER_HAND = 4
 
 
 class LinkerbotHandNode(LifecycleNode):
@@ -334,18 +345,53 @@ class LinkerbotHandNode(LifecycleNode):
             self._destroying = False
 
 
+class WarningLogger(Protocol):
+    """Minimal ROS logger surface used while spinning."""
+
+    def warning(self, message: str) -> None: ...
+
+
+def spin_until_shutdown(executor: Executor, logger: WarningLogger) -> None:
+    """Spin until shutdown, tolerating the destroyed-entity response race.
+
+    A lifecycle transition can destroy a service entity between an in-flight
+    callback returning and rclpy sending its response, and rclpy re-raises that
+    ``InvalidHandle`` out of ``spin()``. The client sees a timeout; the process
+    must keep serving every other hand. Resuming is safe because the failed task
+    was already dropped from the executor before the exception surfaced.
+    """
+
+    while True:
+        try:
+            executor.spin()
+            return
+        except InvalidHandle as error:
+            logger.warning(
+                "an in-flight callback response met an entity destroyed by a "
+                f"lifecycle transition: {error}"
+            )
+            if not rclpy.ok():
+                return
+
+
 def main(args: list[str] | None = None) -> None:
     rclpy.init(args=args)
     node: LinkerbotHandNode | None = None
-    executor = SingleThreadedExecutor()
+    executor = MultiThreadedExecutor(num_threads=CALLBACK_GROUPS_PER_HAND)
     try:
         node = LinkerbotHandNode()
         executor.add_node(node)
-        executor.spin()
+        spin_until_shutdown(executor, node.get_logger())
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        executor.shutdown()
+        # Detach the node before stopping the pool so no in-flight handler races
+        # the destruction below.
+        try:
+            if node is not None:
+                executor.remove_node(node)
+        finally:
+            executor.shutdown()
         try:
             if node is not None:
                 node.destroy_node()
