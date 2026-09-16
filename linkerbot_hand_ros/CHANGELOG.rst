@@ -11,6 +11,13 @@ section.
 Unreleased
 ----------
 
+* Use ``O30/o30`` consistently in driver documentation and tests. Configure
+  ``model=o30`` instead of ``o30i``; the SDK now rejects that historical input
+  name, matching the existing ``L20/l25`` policy. Legacy device product codes
+  such as ``O30i-...`` remain supported and are preserved in ``product_code``
+  while ``model`` reports ``O30``. Document the supported ``l20-lite`` spelling
+  for ``L20Lite`` as well.
+
 * A slow management read no longer stalls the rest of the process. Both entry
   points now spin a multi-threaded executor, so a blocking
   ``~/get_device_info``, ``~/get_stall_protection`` or ``~/recover`` on one hand

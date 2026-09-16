@@ -3,7 +3,7 @@
 [English](README.md) | [简体中文](README_zh.md)
 
 ROS 2 Jazzy Lifecycle driver for Linkerbot O6, L6, L20Lite, L20, O20,
-O30I, and L30 hands. The driver targets the single `HandDevice` 1.x API and
+O30, and L30 hands. The driver targets the single `HandDevice` 1.x API and
 uses the SDK capability object as its only model specification.
 
 The ownership boundary is strict:

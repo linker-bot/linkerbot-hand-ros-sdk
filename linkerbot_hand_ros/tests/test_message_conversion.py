@@ -169,7 +169,7 @@ def test_all_public_raw_telemetry_channels_use_the_generic_projection(model):
 def test_capabilities_keep_percent_direction_units_and_stall_metadata():
     l6 = capabilities_to_message(_capabilities("L6"))
     o6 = capabilities_to_message(_capabilities("O6", side="right"))
-    o30i = capabilities_to_message(_capabilities("O30i"))
+    o30 = capabilities_to_message(_capabilities("O30"))
 
     thumb = l6.joints[0]
     assert thumb.percent_mapping.supported
@@ -191,9 +191,9 @@ def test_capabilities_keep_percent_direction_units_and_stall_metadata():
     assert o6_stall.detection_time.raw_scale_note == "10 ms/count"
     assert o6_stall.hold_current.unit_confidence == "conflicting"
 
-    assert o30i.stall_protection.supported
-    assert not o30i.stall_protection.safety_range_verified
-    stall = o30i.stall_protection
+    assert o30.stall_protection.supported
+    assert not o30.stall_protection.safety_range_verified
+    stall = o30.stall_protection
     expected_semantics = (
         "stall_detection_times",
         "stall_thresholds",
@@ -506,10 +506,49 @@ def test_device_info_preserves_raw_and_semantic_version_representations():
     assert list(message.raw_identity) == [0xC0, 0, 1, 2]
 
 
+@pytest.mark.parametrize(
+    "model, product_code",
+    [
+        ("O30", "O30-20-001-R-B"),
+        ("O30", "O30i-20-001-R-B"),
+        ("L20", "LHT20-10-499-L-B-1-D"),
+        ("L20", "L25-010-001-L-Z-1-A"),
+    ],
+)
+def test_identity_messages_preserve_canonical_model_and_original_product_code(
+    model, product_code
+):
+    capabilities = _capabilities(model)
+    capabilities = replace(
+        capabilities,
+        identity=replace(capabilities.identity, product_code=product_code),
+    )
+    info = DeviceInfo(
+        model=model,
+        serial_number=None,
+        pcb_version=None,
+        firmware_version=None,
+        mechanical_version=None,
+        product_code=product_code,
+        sensor_variant=None,
+        side=capabilities.side,
+        raw_identity=None,
+        meta=_meta(),
+    )
+
+    identity = capabilities_to_message(capabilities).identity
+    message = device_info_to_message(info, ros_now_ns=ROS_NOW_NS)
+
+    for result in (identity, message):
+        assert result.model == model
+        assert result.has_product_code
+        assert result.product_code == product_code
+
+
 def test_stall_state_keeps_three_independent_samples_and_metadata():
-    capabilities = _capabilities("O30i")
+    capabilities = _capabilities("O30")
     initial = HandDevice(
-        model="O30i",
+        model="O30",
         side="left",
         transport=object(),
     ).get_snapshot()

@@ -65,14 +65,30 @@ def test_configuration_uses_declared_sdk_capabilities_as_source_of_truth():
     assert configuration.polling_plan.angle_feedback is AngleFeedbackPolicy.ADAPTIVE
 
 
-def test_l20_configuration_uses_the_corrected_public_model_name():
+@pytest.mark.parametrize(
+    "model, canonical, joint_count",
+    [
+        ("L20", "L20", 16),
+        ("l20", "L20", 16),
+        ("O30", "O30", 20),
+        ("o30", "O30", 20),
+        ("l20-lite", "L20Lite", 10),
+    ],
+)
+def test_configuration_normalizes_public_model_spellings(model, canonical, joint_count):
     configuration = read_driver_configuration(
-        _parameters(model="l20", side="left").__getitem__
+        _parameters(model=model, side="left").__getitem__
     )
 
-    assert configuration.model == "L20"
-    assert configuration.declared_capabilities.model == "L20"
-    assert len(configuration.declared_capabilities.joints) == 16
+    assert configuration.model == canonical
+    assert configuration.declared_capabilities.model == canonical
+    assert len(configuration.declared_capabilities.joints) == joint_count
+
+
+@pytest.mark.parametrize("model", ("O30i", "o30i", "L25", "l25"))
+def test_configuration_rejects_historical_model_names(model):
+    with pytest.raises(ValidationError, match="unsupported hand model"):
+        read_driver_configuration(_parameters(model=model).__getitem__)
 
 
 def test_l30_requires_an_empty_side_parameter():

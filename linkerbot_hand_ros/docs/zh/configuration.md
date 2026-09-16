@@ -24,7 +24,7 @@ ros2 lifecycle set /linkerbot_hand activate
 
 | 参数 | 默认值 | 含义 |
 | --- | --- | --- |
-| `model` | `l6` | `l6/o6/l20lite/l20/o20/l30/o30i` |
+| `model` | `l6` | `l6/o6/l20lite/l20/o20/l30/o30`，不区分大小写；也接受 `l20-lite` 作为 `L20Lite` 的拼写别名 |
 | `side` | `left` | `left/right`；L30 必须为空字符串 |
 | `transport_json` | SocketCAN `can0` | 严格 JSON transport 配置 |
 | `command_rate_hz` | `250` | SDK 连续命令调度上限 |
@@ -37,6 +37,11 @@ ros2 lifecycle set /linkerbot_hand activate
 | `auto_reconnect` | `false` | SDK 自动安全恢复 |
 | `reconnect_initial_delay_s` | `0.1` | 首次重连退避 |
 | `reconnect_max_delay_s` | `2.0` | 最大重连退避 |
+
+型号解析使用 Hand SDK 的统一规则：配置填写 `o30`、`l20`，历史名称 `o30i`、`l25`
+不是配置别名，不能用完整产品编号替代 `model`。采用该规则的 SDK 会在 configure
+参数校验阶段拒绝这些值。设备上报的旧 `O30i-...`、`L25-...` 等编号仍可被 SDK
+识别，消息中的 `model` 使用规范型号，`product_code` 原样保留设备上报的编号。
 
 ## 动态轮询与发布
 
