@@ -21,7 +21,10 @@
 - 支持的命令、telemetry、管理操作与 ACK 能力。
 
 不要在业务包中复制型号范围表。activate 后 capability 会从 declared 更新为 verified，只有
-`identity.verified=true` 才允许进入运动状态机。
+`identity.verified=true` 才允许进入运动状态机。`is_ready()` 还要求指定驱动的
+`get_state` 返回 active 且未过期，并核对命令订阅端点属于该驱动。第三方订阅数量不能代表
+驱动激活。状态每 0.2 秒异步查询，证据从请求发出起最多有效 1 秒；生命周期切换会立即使
+客户端收到的旧证据失效。就绪不等于设备健康或机械安全，仍需当前 generation 的状态反馈。
 
 ## 控制循环
 
@@ -39,8 +42,11 @@ if self.hand.is_ready("angles"):
 
 这一步只表示 DDS publish 完成。命令状态以 `HandCommandStatusBatch` 从 `/command/status`
 异步到达；直接订阅时必须遍历 `statuses[]`，`HandCommandClient` 已代为完成批消息展开和
-`client_id` 过滤。高频 timer/callback 中不得调用 `wait_for_terminal_status()`，否则同一
-executor 可能无法处理 status。使用状态机：
+`client_id` 过滤。高频 timer/callback 使用非阻塞状态机。低频异步回调可以
+`await wait_until_ready_async()` 或 `await wait_for_terminal_status_async()`，即使使用
+单线程 executor，客户端的独立回调组也能接收所等待的消息。同步等待需要其他可用的 executor
+线程；不能在单线程 executor 回调中同步等待。完整契约见[客户端等待说明](../client_waits.md)。
+状态机流程：
 
 ```text
 publish target

@@ -84,7 +84,10 @@ git -C ~/linker-sim-assets lfs pull
 的窗口移回主屏；启动器已强制使用 Qt XCB 后端以避免 Wayland 下窗口不可见。
 
 默认是“仅预览”，滑块只驱动 `target/` TF，不发送实机命令。确认安全并且
-驱动已经发布 `identity.verified=true` 后，显式启用控制：
+驱动已经发布 `identity.verified=true`、生命周期为 active 后，显式启用控制。
+bridge 使用与 `HandCommandClient` 相同的生命周期查询和命令端点归属检查，不再将
+第三方订阅数当作驱动激活。查询每 0.2 秒刷新，状态证据从请求发出起最多有效 1 秒；
+失活或证据过期后停止发指令并清空目标。原有 2 秒角度反馈新鲜度和 generation 保护仍生效：
 
 ```bash
 ros2 service call /o6_gui_bridge/set_control_enabled std_srvs/srv/SetBool \

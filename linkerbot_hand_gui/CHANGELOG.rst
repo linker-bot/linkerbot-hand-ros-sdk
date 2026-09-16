@@ -5,6 +5,11 @@ Changelog for linkerbot_hand_gui
 Unreleased
 ----------
 
+* Use the driver's lifecycle and command endpoint identity to gate control;
+  observers on a command topic no longer impersonate an active driver. Drop
+  armed targets when active evidence is lost and retain angle-age/generation
+  guards. Declare the shared ``linkerbot_hand_ros`` runtime dependency.
+
 0.1.0 (2026-09-11)
 ------------------
 

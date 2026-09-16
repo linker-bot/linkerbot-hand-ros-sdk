@@ -11,6 +11,17 @@ section.
 Unreleased
 ----------
 
+* Isolate HandCommandClient reception from application callbacks and add
+  awaitable readiness/status waits for single-threaded ROS executors. Bound
+  waits with steady time and release them on cancellation or client destruction;
+  document the spare-thread requirement of synchronous waits.
+
+* Require fresh lifecycle evidence and a command endpoint belonging to the
+  named driver for client readiness. Third-party subscriptions and retained
+  verified capabilities no longer make an inactive driver appear ready.
+  Share this check with the O6 GUI, invalidating evidence on transitions and
+  expiring unanswered queries within one second.
+
 * Use ``O30/o30`` consistently in driver documentation and tests. Configure
   ``model=o30`` instead of ``o30i``; the SDK now rejects that historical input
   name, matching the existing ``L20/l25`` policy. Legacy device product codes

@@ -11,9 +11,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from builtin_interfaces.msg import Time
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
 from rclpy.publisher import Publisher
 from rclpy.subscription import Subscription
+from rclpy.task import Future
 
 from linkerbot_hand_msgs.msg import (
     CommandCapability,
@@ -24,6 +27,7 @@ from linkerbot_hand_msgs.msg import (
     HandRawCommand,
 )
 
+from .driver_readiness import DriverReadiness
 from .qos import COMMAND_QOS, HIGH_RATE_PUBLISHER_EVENTS, METADATA_QOS, STATUS_QOS
 
 _RAW_COMMANDS = (
@@ -54,8 +58,21 @@ class CommandPublication:
     values: tuple[float, ...]
 
 
+@dataclass(slots=True)
+class _PendingWait:
+    future: Future
+    deadline: float
+    semantic: str = "angles"
+    user_sequence: int | None = None
+
+
 class HandCommandClient:
-    """Reuse typed publishers and capability-derived validation for one driver."""
+    """Reuse typed publishers and capability-derived validation for one driver.
+
+    Prefer the async waits inside executor callbacks. Synchronous waits require
+    another free executor thread; a single-threaded callback must never block
+    waiting for messages that its own executor needs to receive.
+    """
 
     def __init__(
         self,
@@ -82,6 +99,10 @@ class HandCommandClient:
         self._angle_publisher: Publisher | None = None
         self._raw_publishers: dict[str, Publisher] = {}
         self._subscriptions: list[Subscription] = []
+        self._callback_group = ReentrantCallbackGroup()
+        self._pending_waits: list[_PendingWait] = []
+        self._wait_timer = None
+        self._readiness: DriverReadiness | None = None
         try:
             self._angle_publisher = node.create_publisher(
                 HandJointCommand,
@@ -96,22 +117,31 @@ class HandCommandClient:
                     COMMAND_QOS,
                     event_callbacks=HIGH_RATE_PUBLISHER_EVENTS,
                 )
-            self._subscriptions.extend(
-                (
-                    node.create_subscription(
-                        HandCapabilities,
-                        self._topic("capabilities"),
-                        self._update_capabilities,
-                        METADATA_QOS,
-                    ),
-                    node.create_subscription(
-                        HandCommandStatusBatch,
-                        self._topic("command/status"),
-                        self._update_status_batch,
-                        STATUS_QOS,
-                    ),
+            self._subscriptions.append(
+                node.create_subscription(
+                    HandCapabilities,
+                    self._topic("capabilities"),
+                    self._update_capabilities,
+                    METADATA_QOS,
+                    callback_group=self._callback_group,
                 )
             )
+            self._subscriptions.append(
+                node.create_subscription(
+                    HandCommandStatusBatch,
+                    self._topic("command/status"),
+                    self._update_status_batch,
+                    STATUS_QOS,
+                    callback_group=self._callback_group,
+                )
+            )
+            self._wait_timer = node.create_timer(
+                0.05,
+                self._poll_waits,
+                callback_group=self._callback_group,
+                clock=Clock(clock_type=ClockType.STEADY_TIME),
+            )
+            self._readiness = DriverReadiness(node, root)
         except Exception:
             self._destroy_ros_entities()
             self._destroyed = True
@@ -144,7 +174,7 @@ class HandCommandClient:
             return tuple(joint.name for joint in self._capabilities.joints)
 
     def is_ready(self, semantic: str = "angles") -> bool:
-        """Return whether capability metadata and one driver subscription exist."""
+        """Require verified capabilities and fresh active state of this driver."""
 
         with self._condition:
             self._require_alive()
@@ -153,11 +183,15 @@ class HandCommandClient:
             capability = self._command_capability(semantic)
             if capability is None:
                 return False
-            publisher = self._publisher_for(semantic)
-            return publisher is not None and publisher.get_subscription_count() > 0
+            return self._command_interface_active(semantic)
 
     def wait_until_ready(self, timeout_s: float, semantic: str = "angles") -> bool:
-        """Wait while another executor thread processes discovery and metadata."""
+        """Block while a different executor thread receives metadata.
+
+        In callbacks prefer ``wait_until_ready_async``. This synchronous method
+        needs a spare MultiThreadedExecutor thread (or an externally spinning
+        node when called outside callbacks). Timeout returns False.
+        """
 
         timeout = _positive_timeout(timeout_s)
         deadline = time.monotonic() + timeout
@@ -168,6 +202,18 @@ class HandCommandClient:
             with self._condition:
                 self._condition.wait(timeout=min(remaining, 0.05))
         return True
+
+    def wait_until_ready_async(
+        self, timeout_s: float, semantic: str = "angles"
+    ) -> Future:
+        """Return an awaitable rclpy Future resolving to readiness or False.
+
+        The node must be spinning. Async callbacks can await this even in a
+        SingleThreadedExecutor; internal callbacks use a separate callback group.
+        Cancelling the Future only cancels this wait.
+        """
+
+        return self._add_wait(timeout_s, semantic=semantic)
 
     def set_percent_angles(self, values: Sequence[float]) -> CommandPublication:
         """Publish strict ``0..100`` targets in capability joint order."""
@@ -247,34 +293,103 @@ class HandCommandClient:
         user_sequence: int,
         timeout_s: float,
     ) -> HandCommandStatus | None:
-        """Wait for protocol completion, never for mechanical target arrival."""
+        """Block for protocol completion; timeout returns None.
+
+        Requires another free executor thread, as with ``wait_until_ready``.
+        Neither timeout nor completion implies mechanical target arrival, and a
+        timeout does not cancel an already published command.
+        """
 
         timeout = _positive_timeout(timeout_s)
         deadline = time.monotonic() + timeout
         with self._condition:
             while True:
                 self._require_alive()
-                status = self._statuses.get(user_sequence)
-                if status is not None and (
-                    status.stage in _TERMINAL_STAGES
-                    or (
-                        status.stage == HandCommandStatus.STAGE_DISPATCHED
-                        and status.ack_support == HandCommandStatus.ACK_UNSUPPORTED
-                    )
-                ):
+                status = self._terminal_status(user_sequence)
+                if status is not None:
                     return status
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     return None
                 self._condition.wait(timeout=remaining)
 
+    def wait_for_terminal_status_async(
+        self, user_sequence: int, timeout_s: float
+    ) -> Future:
+        """Return an awaitable rclpy Future yielding a terminal status or None.
+
+        The node must be spinning. Timeout or Future cancellation only ends the
+        wait; it does not cancel the command or prove mechanical target arrival.
+        """
+
+        return self._add_wait(timeout_s, user_sequence=user_sequence)
+
+    def _terminal_status(self, user_sequence: int) -> HandCommandStatus | None:
+        status = self._statuses.get(user_sequence)
+        if status is not None and (
+            status.stage in _TERMINAL_STAGES
+            or (
+                status.stage == HandCommandStatus.STAGE_DISPATCHED
+                and status.ack_support == HandCommandStatus.ACK_UNSUPPORTED
+            )
+        ):
+            return status
+        return None
+
+    def _add_wait(
+        self,
+        timeout_s: float,
+        *,
+        semantic: str = "angles",
+        user_sequence: int | None = None,
+    ) -> Future:
+        timeout = _positive_timeout(timeout_s)
+        with self._condition:
+            self._require_alive()
+            future = Future(executor=self._node.executor)
+            self._pending_waits.append(
+                _PendingWait(
+                    future, time.monotonic() + timeout, semantic, user_sequence
+                )
+            )
+        self._poll_waits()
+        return future
+
+    def _poll_waits(self) -> None:
+        completed = []
+        with self._condition:
+            if self._destroyed:
+                return
+            for wait in tuple(self._pending_waits):
+                if wait.future.cancelled() or wait.future.done():
+                    self._pending_waits.remove(wait)
+                    continue
+                result = (
+                    self.is_ready(wait.semantic)
+                    if wait.user_sequence is None
+                    else self._terminal_status(wait.user_sequence)
+                )
+                if result or time.monotonic() >= wait.deadline:
+                    self._pending_waits.remove(wait)
+                    completed.append((wait.future, result))
+        # Future callbacks can run inline when no executor is attached.
+        for future, result in completed:
+            if not future.cancelled():
+                future.set_result(result)
+
     def destroy(self) -> None:
         with self._condition:
             if self._destroyed:
                 return
             self._destroyed = True
+            pending, self._pending_waits = self._pending_waits, []
             self._destroy_ros_entities()
             self._condition.notify_all()
+        for wait in pending:
+            if not wait.future.cancelled():
+                wait.future.set_exception(
+                    RuntimeError("hand command client has been destroyed")
+                )
 
     def _set_raw(
         self,
@@ -341,11 +456,13 @@ class HandCommandClient:
         with self._condition:
             self._capabilities = message
             self._condition.notify_all()
+        self._poll_waits()
 
     def _update_status(self, message: HandCommandStatus) -> None:
         with self._condition:
             if self._store_status_locked(message):
                 self._condition.notify_all()
+        self._poll_waits()
 
     def _update_status_batch(self, message: HandCommandStatusBatch) -> None:
         with self._condition:
@@ -354,6 +471,7 @@ class HandCommandClient:
                 changed = self._store_status_locked(status) or changed
             if changed:
                 self._condition.notify_all()
+        self._poll_waits()
 
     def _store_status_locked(self, message: HandCommandStatus) -> bool:
         if message.client_id != self._client_id or message.user_sequence == 0:
@@ -372,10 +490,16 @@ class HandCommandClient:
             capability = self._command_capability(semantic)
             if capability is None:
                 raise RuntimeError(f"driver does not declare {semantic} support")
-            publisher = self._publisher_for(semantic)
-            if publisher is None or publisher.get_subscription_count() <= 0:
+            if not self._command_interface_active(semantic):
                 raise RuntimeError(f"driver {semantic} command interface is not active")
             return capability
+
+    def _command_interface_active(self, semantic: str) -> bool:
+        return (
+            self._publisher_for(semantic) is not None
+            and self._readiness is not None
+            and self._readiness.is_active(self._topic(f"command/{semantic}"))
+        )
 
     def _command_capability(self, semantic: str) -> CommandCapability | None:
         if self._capabilities is None:
@@ -411,6 +535,12 @@ class HandCommandClient:
         return f"{self._driver_name}/{suffix}"
 
     def _destroy_ros_entities(self) -> None:
+        if self._readiness is not None:
+            self._readiness.destroy()
+            self._readiness = None
+        if self._wait_timer is not None:
+            self._node.destroy_timer(self._wait_timer)
+            self._wait_timer = None
         for subscription in self._subscriptions:
             self._node.destroy_subscription(subscription)
         for publisher in self._raw_publishers.values():

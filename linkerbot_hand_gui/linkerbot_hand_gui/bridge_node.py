@@ -7,6 +7,7 @@ import threading
 import time
 from typing import Any
 
+from linkerbot_hand_ros.driver_readiness import DriverReadiness
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import JointState
@@ -122,6 +123,7 @@ class O6GuiBridge(Node):
         if rate <= 0.0:
             raise ValueError("command_rate_hz must be positive")
         self._timer = self.create_timer(1.0 / rate, self._publish_latest_target)
+        self._readiness = DriverReadiness(self, driver_name)
         control_state = "enabled" if self._control_enabled else "disabled"
         self.get_logger().info(
             "O6 GUI bridge ready; control is "
@@ -250,7 +252,9 @@ class O6GuiBridge(Node):
                 with self._lock:
                     self._disarm_target_locked()
             return
-        if self._command_publisher.get_subscription_count() == 0:
+        if not self._readiness.is_active(f"{self._driver_name}/command/angles"):
+            with self._lock:
+                self._disarm_target_locked()
             return
         try:
             percent = self._mapping.percent_from_urdf(target)
@@ -285,7 +289,7 @@ class O6GuiBridge(Node):
                     response.success = False
                     response.message = "等待已验证的 O6 capabilities"
                     return response
-                if self._command_publisher.get_subscription_count() == 0:
+                if not self._readiness.is_active(f"{self._driver_name}/command/angles"):
                     response.success = False
                     response.message = "O6 Lifecycle 驱动未激活"
                     return response
@@ -298,6 +302,10 @@ class O6GuiBridge(Node):
             response.success = True
             response.message = "实机控制已启用" if request.data else "实机控制已停用"
             return response
+
+    def destroy_node(self) -> bool:
+        self._readiness.destroy()
+        return super().destroy_node()
 
     def _disarm_target_locked(self) -> None:
         """Drop the latest motion target while ``self._lock`` is held."""

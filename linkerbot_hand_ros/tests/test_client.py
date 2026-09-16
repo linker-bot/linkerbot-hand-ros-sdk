@@ -47,7 +47,7 @@ class FailingConstructionNode:
 
 
 @pytest.fixture
-def client_rig():
+def client_rig(monkeypatch):
     rclpy.init()
     node = Node("typed_hand_client_test")
     client = HandCommandClient(node, client_id=101)
@@ -57,6 +57,11 @@ def client_rig():
     raw_originals = dict(client._raw_publishers)
     raw = {name: RecordingPublisher() for name in client._raw_publishers}
     client._raw_publishers.update(raw)
+    # Publication tests isolate readiness; real lifecycle/graph evidence is
+    # exercised by test_client_executor and test_driver_readiness.
+    monkeypatch.setattr(
+        client._readiness, "is_active", lambda _topic: angle.subscriptions > 0
+    )
     capabilities = get_declared_capabilities("l6", side="left")
     capabilities = replace(
         capabilities,
@@ -212,7 +217,7 @@ def test_status_batch_updates_all_matching_client_sequences(client_rig):
     assert client.get_status(second.user_sequence) is statuses[1]
 
 
-def test_readiness_requires_capability_and_driver_subscription(client_rig):
+def test_readiness_requires_capability_and_active_driver(client_rig):
     client, angle, _raw = client_rig
     assert client.is_ready("angles")
 

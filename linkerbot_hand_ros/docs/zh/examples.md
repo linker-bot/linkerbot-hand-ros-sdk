@@ -96,8 +96,9 @@ def main() -> None:
 ```
 
 `set_percent_angles()` 表示发布成功，不表示 SDK 已接受。SDK stage 从 status topic 到达。
-不要在定时 callback 中调用 `wait_for_terminal_status()`；需要等待时使用另一线程或异步状态机，
-并保证 executor 仍在处理 status。
+高频 callback 使用状态机；低频异步 callback 可使用
+`await client.wait_for_terminal_status_async(sequence, timeout_s)`。同步等待需要另外的可用
+executor 线程，不能在单线程 executor callback 中使用。见[等待契约](../client_waits.md)。
 
 仓库内置：
 
