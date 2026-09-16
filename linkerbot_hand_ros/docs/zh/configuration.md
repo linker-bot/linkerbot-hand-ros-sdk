@@ -70,8 +70,8 @@ ros2 lifecycle set /linkerbot_hand activate
 - `command_feedback_only`：只用已验证的设置回显满足反馈，不主动补充角度查询；
 - `adaptive`：优先使用设置回显，目标周期内没有回显时主动查询补足，默认使用该策略。
 
-生产入口固定使用 `SingleThreadedExecutor`。Python 多线程 executor 在高频短回调下会因 GIL
-和线程切换降低吞吐。SDK 缓存 revision 变化会立即唤醒独立状态发布线程，避免固定 timer
+生产入口使用 `MultiThreadedExecutor`，Lifecycle 与参数服务仍共享默认互斥回调组。
+SDK 缓存 revision 变化会立即唤醒独立状态发布线程，避免固定 timer
 与反馈同频时发生采样混叠；`publish_rate_hz` 只控制无新 revision 时 age/stale 的复查频率。
 sequence 未变化时不会重复发布旧样本。
 
@@ -91,6 +91,23 @@ ros2 param set --help
 
 需要严格原子更新时应通过 `rcl_interfaces/srv/SetParametersAtomically` 或代码中的
 `AsyncParameterClient.set_parameters_atomically()`，频率 benchmark 已按此方式实现。
+
+动态更新先经过所有 ROS 校验回调，只有参数提交成功后才应用 SDK polling 和 ROS 发布频率。
+后续校验拒绝时不会改变运行配置。应用失败会尝试恢复整批参数和运行配置，返回
+`successful=false` 与失败原因；逐个参数 API 保留前面已成功的更新。
+
+ROS 参数事件可能先发布新值、再发布恢复的旧值，post-set 回调也在 SDK 应用之前运行。
+因此参数事件不能作为设备已采用新频率的确认，应检查参数服务的最终响应。请勿在参数回调
+内部再次设置参数，嵌套更新会明确拒绝；自定义校验、pre-set/post-set 回调同样参与恢复，
+SDK 不会绕过它们强改 ROS 内部参数字典。
+
+如果运行时恢复失败，或其他回调拒绝/改写了参数恢复，驱动停止接收命令、停止 polling 并
+关闭连接，报告 `cleanup required`。在成功 cleanup 后重新 configure/activate；若已通过
+ROS error transition 完整释放运行时，直接重新 configure/activate 即可。驱动保留的参数
+表示下次配置的目标值，不能将此故障状态解释为设备仍按该频率运行。
+
+参数服务与 Lifecycle 服务使用同一互斥回调组。应用内直接调用参数或 Lifecycle 方法时，
+也应在该组中调度或由调用方串行化，避免绕过 ROS 服务调度并发改变生命周期。
 
 ## Transport JSON
 

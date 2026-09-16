@@ -29,7 +29,7 @@ Runtime parameters are `publish_rate_hz`, `diagnostic_rate_hz`, `angles_hz`,
 `query_only`, `command_feedback_only`, or `adaptive`. Zero disables that SDK
 polling channel; `publish_rate_hz=0` only pauses ROS state publication. Runtime capability
 fallback is still checked from SDK memory and republished at 10 Hz without
-performing device I/O. The production process uses a `SingleThreadedExecutor`;
+performing device I/O. The production process uses a `MultiThreadedExecutor`;
 SDK cache revisions wake the state publisher immediately. `publish_rate_hz`
 controls idle cache checks for age/stale transitions, and zero pauses ROS state
 publication. An unchanged sequence is never republished.
@@ -38,6 +38,17 @@ With `query_only`, verified angle-command feedback remains available in the SDK
 snapshot and metrics but is not published on `~/state/angles`; that topic then
 contains active-query responses only. The other feedback policies publish
 verified command feedback normally.
+
+Runtime rate changes apply only after all ROS parameter validators accept and
+ROS commits the values. Later validation rejection has no SDK/timer side
+effects. If application fails, the driver compensates by restoring parameters
+and runtime configuration and returns `successful=false`. Parameter events may
+show both the proposal and restoration; use the final service response to judge
+application. A failed restoration disables control and closes the runtime;
+perform cleanup, configure and activate before resuming. If the lifecycle error
+path already completed cleanup, configure and activate are sufficient. Nested
+parameter updates from callbacks are rejected. Direct application calls to
+parameter/lifecycle methods must be serialized like the standard ROS services.
 
 The default transport is:
 

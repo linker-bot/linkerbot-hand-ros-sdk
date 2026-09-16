@@ -39,6 +39,12 @@ Unreleased
   destroying the entities they use, and a response that still loses that race is
   logged instead of ending the process.
 
+* Keep parameter validators free of SDK polling and timer side effects. Apply
+  runtime configuration after ROS commits; compensate both parameter and
+  runtime values on application failure. If restoration fails or is rejected,
+  disable control and require lifecycle cleanup before resuming. Both atomic
+  and per-parameter APIs report failures, including through ROS services.
+
 * ``tag`` now creates the Gitea Release as well, so a release is a signed tag
   plus a Release and nothing else. Creating it was the step ``v2.0.0`` missed
   even after everything else was repaired, leaving it the only tag in this

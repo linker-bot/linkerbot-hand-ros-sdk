@@ -635,13 +635,16 @@ def test_parameter_update_contains_runtime_rollback_failures(node_rig, monkeypat
     monkeypatch.setattr(node._device, "start_polling", fail_polling_rollback)
     monkeypatch.setattr(node._interfaces, "apply_rates", fail_rate_update)
 
-    result = node._on_set_parameters([Parameter("angles_hz", value=50.0)])
+    result = node.set_parameters_atomically([Parameter("angles_hz", value=50.0)])
 
     assert not result.successful
     assert "timer update failed" in result.reason
     assert "polling rollback failed" in result.reason
     assert "runtime rollback failed" in result.reason
     assert node._configuration.polling_plan.angles_hz == 100.0
+    assert node.get_parameter("angles_hz").value == 100.0
+    assert not node._active
+    assert node._parameter_fault is not None
 
 
 def test_one_hundred_lifecycle_cycles_leak_no_admin_threads():

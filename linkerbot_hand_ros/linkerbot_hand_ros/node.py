@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from typing import Any, Protocol
 
@@ -47,6 +48,9 @@ class LinkerbotHandNode(LifecycleNode):
         **kwargs: Any,
     ) -> None:
         super().__init__("linkerbot_hand", **kwargs)
+        self._parameter_lock = threading.RLock()
+        self._parameter_update_in_progress = False
+        self._parameter_fault: str | None = None
         declare_driver_parameters(self)
         self._device_factory = device_factory
         self._configuration: DriverConfiguration | None = None
@@ -97,6 +101,11 @@ class LinkerbotHandNode(LifecycleNode):
     def on_activate(self, state: LifecycleState) -> TransitionCallbackReturn:
         """Open, verify, start SDK polling, then enable ROS control surfaces."""
 
+        if self._parameter_fault is not None:
+            self.get_logger().error(
+                "activate refused: parameter recovery requires cleanup"
+            )
+            return TransitionCallbackReturn.FAILURE
         device = self._device
         configuration = self._configuration
         interfaces = self._interfaces
@@ -159,6 +168,7 @@ class LinkerbotHandNode(LifecycleNode):
         if success:
             self._device = None
             self._configuration = None
+            self._parameter_fault = None
             self.get_logger().info("cleaned up; SDK connection closed")
             return TransitionCallbackReturn.SUCCESS
         return TransitionCallbackReturn.ERROR
@@ -188,10 +198,17 @@ class LinkerbotHandNode(LifecycleNode):
         if success:
             self._device = None
             self._configuration = None
+            self._parameter_fault = None
             return TransitionCallbackReturn.SUCCESS
         return TransitionCallbackReturn.ERROR
 
     def _on_set_parameters(self, parameters: list[Parameter]) -> SetParametersResult:
+        """Validate only; another on-set callback can still reject this update."""
+
+        if self._parameter_fault is not None:
+            return SetParametersResult(
+                successful=False, reason="parameter recovery requires cleanup"
+            )
         prepared = prepare_parameter_update(
             parameters,
             self._configuration,
@@ -200,47 +217,160 @@ class LinkerbotHandNode(LifecycleNode):
         )
         if not prepared.result.successful or prepared.configuration is None:
             return prepared.result
-        previous = self._configuration
-        if previous is None:
-            return SetParametersResult(
-                successful=False,
-                reason="driver configuration is unavailable",
-            )
-        updated = prepared.configuration
-        device = self._device
-        interfaces = self._interfaces
         try:
-            if self._active and device is not None:
-                validate_polling_plan(device.get_capabilities(), updated.polling_plan)
-                device.start_polling(updated.polling_plan)
-            if interfaces is not None:
-                interfaces.apply_rates(updated)
-            self._configuration = updated
-            return prepared.result
-        except Exception as error:
-            rollback_errors: list[BaseException] = []
-            if self._active and device is not None:
-                try:
-                    device.start_polling(previous.polling_plan)
-                except Exception as rollback_error:
-                    rollback_errors.append(rollback_error)
-            if interfaces is not None:
-                try:
-                    interfaces.apply_rates(previous)
-                except Exception as rollback_error:
-                    rollback_errors.append(rollback_error)
-            reason = self._error_text(error)
-            if rollback_errors:
-                details = "; ".join(
-                    self._error_text(rollback_error)
-                    for rollback_error in rollback_errors
+            if self._active and self._device is not None:
+                validate_polling_plan(
+                    self._device.get_capabilities(), prepared.configuration.polling_plan
                 )
-                reason = f"{reason}; runtime rollback failed: {details}"
-                self.get_logger().error(reason)
-            return SetParametersResult(
-                successful=False,
-                reason=reason,
+        except Exception as error:
+            return SetParametersResult(successful=False, reason=self._error_text(error))
+        return prepared.result
+
+    def set_parameters(
+        self, parameter_list: list[Parameter]
+    ) -> list[SetParametersResult]:
+        """Preserve ROS per-parameter semantics using the same commit boundary."""
+
+        return [
+            self.set_parameters_atomically([parameter]) for parameter in parameter_list
+        ]
+
+    def set_parameters_atomically(
+        self, parameter_list: list[Parameter]
+    ) -> SetParametersResult:
+        """Apply runtime changes after ROS validation and compensate on failure.
+
+        Use public rclpy APIs, including for restoration, so all validators and
+        parameter event observers remain involved. Parameter events can expose
+        the committed proposal followed by its compensating restoration.
+        """
+
+        # rclpy may set its own parameters during base-node construction.
+        if not hasattr(self, "_parameter_lock"):
+            return super().set_parameters_atomically(parameter_list)
+        with self._parameter_lock:
+            if self._parameter_update_in_progress:
+                return SetParametersResult(
+                    successful=False,
+                    reason="nested parameter updates are not supported",
+                )
+            self._parameter_update_in_progress = True
+            try:
+                return self._commit_parameter_update(parameter_list)
+            finally:
+                self._parameter_update_in_progress = False
+
+    def _parameter_snapshot(self) -> dict[str, Parameter]:
+        return {
+            name: self.get_parameter_or(name)
+            for name in self.list_parameters([], depth=0).names
+        }
+
+    @staticmethod
+    def _restoration_parameters(
+        before: dict[str, Parameter], current: dict[str, Parameter]
+    ) -> list[Parameter]:
+        restored = []
+        for name in sorted(before.keys() | current.keys()):
+            old, new = before.get(name), current.get(name)
+            if old is new:
+                continue
+            # Parameter compares by object identity. Pre-set callbacks may
+            # rebuild equivalent Parameter objects during recovery.
+            if (
+                old is None
+                or new is None
+                or old.to_parameter_msg() != new.to_parameter_msg()
+            ):
+                restored.append(before.get(name, Parameter(name)))
+        return restored
+
+    def _commit_parameter_update(
+        self, parameters: list[Parameter]
+    ) -> SetParametersResult:
+        before = self._parameter_snapshot()
+        previous = self._configuration
+        runtime_attempted = False
+        try:
+            result = super().set_parameters_atomically(parameters)
+            if not result.successful or previous is None:
+                return result
+            updated = read_driver_configuration(
+                lambda name: self.get_parameter(name).value
             )
+            if updated != previous:
+                runtime_attempted = True
+                self._apply_runtime_configuration(updated)
+            return result
+        except Exception as error:
+            if not runtime_attempted and not self._restoration_parameters(
+                before, self._parameter_snapshot()
+            ):
+                # Preserve rclpy errors such as undeclared/ill-typed parameters.
+                raise
+            reason = self._error_text(error)
+            recovery_errors = []
+            if runtime_attempted and previous is not None:
+                try:
+                    self._apply_runtime_configuration(previous)
+                except Exception as recovery_error:
+                    recovery_errors.append(
+                        f"runtime rollback failed: {self._error_text(recovery_error)}"
+                    )
+            restore = self._restoration_parameters(before, self._parameter_snapshot())
+            try:
+                if restore:
+                    restored = super().set_parameters_atomically(restore)
+                    if not restored.successful:
+                        raise RuntimeError(restored.reason)
+                if self._restoration_parameters(before, self._parameter_snapshot()):
+                    raise RuntimeError(
+                        "callbacks changed the restored parameter values"
+                    )
+            except Exception as recovery_error:
+                recovery_errors.append(
+                    f"parameter rollback failed: {self._error_text(recovery_error)}"
+                )
+            if recovery_errors:
+                reason = f"{reason}; {'; '.join(recovery_errors)}; cleanup required"
+                self._fail_parameter_recovery(reason)
+            self.get_logger().error(f"parameter update failed: {reason}")
+            return SetParametersResult(successful=False, reason=reason)
+
+    def _apply_runtime_configuration(self, configuration: DriverConfiguration) -> None:
+        if self._active and self._device is not None:
+            self._device.start_polling(configuration.polling_plan)
+        if self._interfaces is not None:
+            self._interfaces.apply_rates(configuration)
+        self._configuration = configuration
+
+    def _fail_parameter_recovery(self, reason: str) -> None:
+        """Disable command admission even if compensation cannot restore state."""
+
+        self._parameter_fault = reason
+        was_active, self._active = self._active, False
+        if was_active:
+            try:
+                self.trigger_deactivate()
+            except Exception as error:
+                self.get_logger().error(
+                    f"parameter failure deactivation failed: {self._error_text(error)}"
+                )
+        self._release_runtime()
+        # Retain the parameters that actually committed as the desired config;
+        # runtime is stopped and activation remains blocked until cleanup.
+        if self._configuration is not None:
+            try:
+                self._configuration = read_driver_configuration(
+                    lambda name: self.get_parameter(name).value
+                )
+            except Exception as error:
+                self.get_logger().error(
+                    f"parameter failure configuration unavailable: {self._error_text(error)}"
+                )
+        self._parameter_fault = (
+            reason if self._device is not None or self._interfaces is not None else None
+        )
 
     def _rollback_activation(self, state: LifecycleState) -> None:
         self._active = False
