@@ -10,10 +10,19 @@ a dated version section and create a new empty ``Unreleased`` section.
 Unreleased
 ----------
 
-* Add ``GetRawValues`` for endpoint-selected active configuration reads, with a
-  complete ``HandTelemetry`` response and stable failure fields. L6 uses it for
-  ``get_limit_compensations``. Existing message/service definitions are unchanged;
-  rebuild this package and dependent drivers to use the new service.
+* **Breaking wire change:** add ``CommandCapability.returns_current_state`` for
+  current-state command feedback, independently of protocol ACK and target
+  arrival. This changes the enclosing ``HandCapabilities`` ROSIDL type. Rebuild
+  all message consumers together; the next release must be major under the
+  existing release policy. Published package versions remain unchanged here.
+
+* Add ``GetRawValues`` for endpoint-selected raw reads, with a complete
+  ``HandTelemetry`` response and stable failure fields. L6 uses it for
+  ``get_limit_compensations``; configuration/limit services reuse the same fields.
+  Clarify query, command-response and command-cache read modes: successful cache
+  reads retain original sample metadata and can be stale. Adding this service
+  itself does not alter existing interface fields; the separate command
+  capability change above does.
 
 2.0.0 (2026-09-11)
 ------------------

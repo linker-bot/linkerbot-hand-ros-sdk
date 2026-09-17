@@ -17,6 +17,7 @@ from linkerbot_hand import (
     HandDevice,
     HandError,
     HandSnapshot,
+    ReadMode,
     TelemetrySemantic,
     TimeoutError,
     UnsupportedOperationError,
@@ -57,6 +58,14 @@ _STALL_SETTERS = {
 _CONFIG_SETTERS = {
     **_STALL_SETTERS,
     "limit_compensations": CommandSemantic.LIMIT_COMPENSATIONS,
+}
+_RAW_GETTERS = {
+    TelemetrySemantic.CONFIGURED_SPEEDS: "get_configured_speeds",
+    TelemetrySemantic.CONFIGURED_ACCELERATIONS: "get_configured_accelerations",
+    TelemetrySemantic.CURRENT_LIMITS: "get_current_limits",
+    TelemetrySemantic.EFFORT_LIMITS: "get_effort_limits",
+    TelemetrySemantic.MOTION_TIMES: "get_motion_times",
+    TelemetrySemantic.LIMIT_COMPENSATIONS: "get_limit_compensations",
 }
 
 
@@ -166,14 +175,15 @@ class ManagementInterface:
                     "limit_compensations", request, response
                 ),
             )
-        if (
-            self._capabilities.telemetry_channel(TelemetrySemantic.LIMIT_COMPENSATIONS)
-            is not None
-        ):
+        for semantic, getter in _RAW_GETTERS.items():
+            if self._capabilities.telemetry_channel(semantic) is None:
+                continue
             self._add_service(
                 GetRawValues,
-                "~/get_limit_compensations",
-                self._get_limit_compensations,
+                f"~/{getter}",
+                lambda request, response, value=semantic: self._get_raw_values(
+                    value, request, response
+                ),
             )
         for operation in DiscreteOperation:
             if not getattr(operations, operation.value):
@@ -251,8 +261,9 @@ class ManagementInterface:
                 _set_failure(response, error)
             return response
 
-    def _get_limit_compensations(
+    def _get_raw_values(
         self,
+        semantic: TelemetrySemantic,
         request: GetRawValues.Request,
         response: GetRawValues.Response,
     ) -> GetRawValues.Response:
@@ -262,14 +273,16 @@ class ManagementInterface:
             try:
                 timeout = self._request_timeout(request.timeout_s)
                 device = self._device()
-                capability = device.get_capabilities().telemetry_channel(
-                    TelemetrySemantic.LIMIT_COMPENSATIONS
-                )
+                capability = device.get_capabilities().telemetry_channel(semantic)
                 if capability is None:
-                    raise UnsupportedOperationError("limit compensation is unsupported")
+                    raise UnsupportedOperationError(f"{semantic.value} is unsupported")
+                getter_name = _RAW_GETTERS[semantic]
+                getter = getattr(device, getter_name)
+                # The SDK getter owns query/cache and firmware support semantics.
+                # Never emulate a query by writing a target or refreshing a stamp.
                 sample = self._worker.call(
-                    "get_limit_compensations",
-                    lambda: device.get_limit_compensations(timeout),
+                    getter_name,
+                    lambda: getter(timeout),
                     timeout_s=_worker_timeout(timeout),
                 )
                 response.state = telemetry_sample_to_message(
@@ -278,7 +291,14 @@ class ManagementInterface:
                     ros_now_ns=self._node.get_clock().now().nanoseconds,
                 )
                 response.success = True
-                response.message = "limit compensation refreshed"
+                if capability.read_mode is ReadMode.COMMAND_CACHE:
+                    response.message = "local command cache; no device query performed"
+                elif capability.read_mode is ReadMode.COMMAND_RESPONSE:
+                    response.message = (
+                        "last device command response; no device query performed"
+                    )
+                else:
+                    response.message = f"{semantic.value} refreshed from device"
             except Exception as error:
                 _set_failure(response, error)
             return response

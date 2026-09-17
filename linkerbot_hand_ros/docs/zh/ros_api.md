@@ -9,6 +9,17 @@ runtime 和总线仲裁；独立进程不共享。
 
 ## 元数据
 
+读取 `~/capabilities.commands` 中 `semantic="angles"` 的
+`returns_current_state`，可判断角度写命令回包是否包含可用作反馈的当前状态。
+该标记与 `ack_support` 独立，不表示目标回显、协议 ACK 或机械到位。
+`angles_hz>0` 时，SDK 会拒绝在此标记为 false 的设备上启用
+`command_feedback_only`。当前 L6/O6/L20Lite/L20 为 true，L30/O20/O30 为 false；
+程序应读取字段，不硬编码型号表。
+
+能力 schema `1.2` 增加此字段，改变 `CommandCapability` 及包含它的
+`HandCapabilities` 的 ROSIDL 类型。需同时重建消息包、驱动、GUI 和所有外部能力消息
+消费者；新旧构建不能混用，revision 字符串不能解决底层类型不兼容。
+
 | Topic | 类型 | QoS | 内容 |
 | --- | --- | --- | --- |
 | `~/capabilities` | `linkerbot_hand_msgs/msg/HandCapabilities` | reliable + transient local | configure 发布 declared capability，activate 后发布 verified capability |
@@ -161,6 +172,11 @@ thresholds 和 hold currents 三个 raw 样本及独立元数据。协议范围�
 | --- | --- | --- |
 | `~/get_device_info` | `GetDeviceInfo` | 主动刷新身份和全部支持版本字段 |
 | `~/get_stall_protection` | `GetStallProtection` | 在一个总 timeout 内读取三项堵转配置 |
+| `~/get_configured_speeds` | `GetRawValues` | 配置速度；按能力查询设备或读取写入回包/本地命令缓存 |
+| `~/get_configured_accelerations` | `GetRawValues` | 配置加速度 |
+| `~/get_current_limits` | `GetRawValues` | 电流上限；按能力查询设备或读取本地命令缓存 |
+| `~/get_effort_limits` | `GetRawValues` | effort 通道；L20/L20Lite 返回当前实测负载 |
+| `~/get_motion_times` | `GetRawValues` | 运动时间配置 |
 | `~/set_stall_detection_times` | `SetRawValues` | 非阻塞提交 raw 配置 |
 | `~/set_stall_thresholds` | `SetRawValues` | 非阻塞提交 raw 配置 |
 | `~/set_stall_hold_currents` | `SetRawValues` | 非阻塞提交 raw 配置 |
@@ -187,6 +203,38 @@ current=`C7`。ROS 只收发 raw；当前资料给出的解释分别为 `1000/25
 主动读取在独立、有界 admin worker 中执行，不阻塞控制 callback。setter/离散服务的
 `accepted=true` 仅表示进入 SDK，后续阶段看 `/command/status`。服务错误通过稳定
 `error_code` 返回，调用方不能解析 message 文本分类。
+
+## 按需读取配置与限制状态
+
+上述六个 `GetRawValues` 入口在 configure 时按 telemetry capability 创建，在 active
+状态下调用，直接复用 SDK getter。只有写命令能力不代表存在可读通道。订阅
+`~/state/<semantic>` 只是观察缓存，不会触发设备查询；主动查询成功后更新 SDK 缓存，
+启用状态发布时会发布变化后的样本。调用这些服务不增加轮询通道，也不发送配置写命令。
+
+读取 `~/capabilities.telemetry` 中的 `read_mode`，区分以下行为：
+
+| `read_mode` | 调用行为 | 当前示例 |
+| --- | --- | --- |
+| `query` | 请求调用之后的新设备样本 | O6 配置速度/加速度/电流上限；O30 运动时间 |
+| `command_response` | 返回最近一次有效的设备写入回包，不发新查询 | L6 配置速度 |
+| `command_cache` | 返回最近一次有效的本地已发送命令缓存，不表示设备已确认，不发新查询 | L30 配置速度/电流上限 |
+
+L20/L20Lite 的 `get_effort_limits` 查询的是**当前实测负载**，不是读取保存的限制配置；
+保留 `device_measured=true` 和 SDK 给出的原始单位、比例说明。所有型号均透传 SDK
+元数据，不根据方法名推断为真实扭矩。
+
+成功响应的 `state` 保留 raw、通道名称、单位、比例说明、可信度及 `meta`。读取回包或
+缓存不会刷新原采集时刻和 sequence；age/stale 按读取时刻计算，因此 `success=true`
+的缓存仍可能 `meta.stale=true`。`device_queried` 表示通道能力，不代表每条已发布样本
+都来自查询；某条样本的来源看 `meta.origin`。回包/缓存模式的 message 会说明未执行设备
+查询，程序判断应使用结构化元数据。
+
+先检查 `success` 再使用 `state`。回包/缓存尚无有效样本时返回 `unsupported_operation`，
+不会为了取得数据而代发写命令。当前固件不支持某可选查询时，入口保留，SDK 完成降级后
+返回 `unsupported_firmware`。inactive 或正在关闭时返回 `device_not_ready`；timeout
+参数非法返回 `validation`；SDK 超时、协议等错误保留原有稳定错误码。`timeout_s` 必须
+有限且大于零，并为 `shutdown_timeout_s` 留出管理 worker 的结束余量。服务不增加固件
+版本门槛；查询仍与命令共享 SDK 设备/总线调度，应在总线预算内按需调用。
 
 ## L6 限位补偿
 
@@ -222,8 +270,9 @@ ros2 service call /linkerbot_hand/get_limit_compensations \
 写响应。订阅该 Topic 不触发设备 I/O，也不增加轮询频率参数；使用者须检查 `meta.valid`、
 `meta.stale`、来源及连接代次。这是配置数据，`device_measured=false`。
 
-新增 `GetRawValues` 服务后需要重新构建 `linkerbot_hand_msgs` 及依赖它的驱动；已有消息
-和服务的字段定义保持不变。
+使用 `GetRawValues` 服务需重新构建 `linkerbot_hand_msgs` 及依赖它的驱动。新增服务入口
+本身不改变服务字段；本次另有上文所述 command capability 消息类型变更，能力消息的所有
+消费者也必须一起重建。
 
 ## Diagnostics
 

@@ -22,7 +22,7 @@ from linkerbot_hand import (
 
 from linkerbot_hand_msgs import msg as ros_messages
 
-CAPABILITY_SCHEMA_REVISION = "1.1"
+CAPABILITY_SCHEMA_REVISION = "1.2"
 
 
 def capabilities_to_message(
@@ -163,6 +163,7 @@ def _command_to_message(
         raw_scale_note=value.raw_scale_note or "",
         unit_confidence=value.unit_confidence.value,
         ack_support=value.ack_support.value,
+        returns_current_state=value.returns_current_state,
         percent_mappings=[_percent_to_message(item) for item in mappings],
     )
 

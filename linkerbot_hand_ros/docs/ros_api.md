@@ -39,6 +39,19 @@ snapshot and metrics but is not published on `~/state/angles`; that topic then
 contains active-query responses only. The other feedback policies publish
 verified command feedback normally.
 
+To determine whether angle writes can provide feedback, find the `angles` entry
+in `~/capabilities.commands` and read `returns_current_state`. A true value means
+the response contains current state usable as feedback; it does not mean target
+echo, protocol ACK or mechanical arrival. The SDK rejects `command_feedback_only`
+with a nonzero angle rate if this flag is false. Current declarations are true
+for L6/O6/L20Lite/L20 and false for L30/O20/O30; consume the flag rather than
+hard-coding that model list.
+
+Capability schema `1.2` adds this field to `CommandCapability`, changing the
+enclosing `HandCapabilities` ROSIDL type. Rebuild messages, driver, GUI and all
+external capability consumers together. Old and new message builds must not be
+mixed; checking the revision string does not provide wire compatibility.
+
 Runtime rate changes apply only after all ROS parameter validators accept and
 ROS commits the values. Later validation rejection has no SDK/timer side
 effects. If application fails, the driver compensates by restoring parameters
@@ -130,6 +143,11 @@ a command; it is neither a target echo nor a command acknowledgement.
 | --- | --- | --- |
 | `~/get_device_info` | `GetDeviceInfo` | Admin worker performs one fresh identity transaction |
 | `~/get_stall_protection` | `GetStallProtection` | Freshly reads all three supported stall settings |
+| `~/get_configured_speeds` | `GetRawValues` | Configured speeds; device query, write response or command cache according to capability |
+| `~/get_configured_accelerations` | `GetRawValues` | Configured accelerations |
+| `~/get_current_limits` | `GetRawValues` | Current limits; device query or command cache according to capability |
+| `~/get_effort_limits` | `GetRawValues` | Effort channel; L20/L20Lite return measured live load |
+| `~/get_motion_times` | `GetRawValues` | Motion-time configuration |
 | `~/set_stall_detection_times` | `SetRawValues` | Asynchronous raw configuration acceptance |
 | `~/set_stall_thresholds` | `SetRawValues` | Asynchronous raw configuration acceptance |
 | `~/set_stall_hold_currents` | `SetRawValues` | Asynchronous raw configuration acceptance |
@@ -150,6 +168,47 @@ feedback policy, deadlines, timeouts, and cached data age. These counters let
 benchmarks distinguish active angle queries from verified command feedback.
 
 See the [Chinese API reference](zh/ros_api.md) for examples and QoS details.
+
+## On-Demand Raw Reads
+
+The six `GetRawValues` endpoints above are registered during configure when the
+corresponding telemetry capability exists. Call them while active. They reuse
+the SDK getters; subscribing to `~/state/<semantic>` only observes the cache
+and does not query the device. A successful query updates that cache, and normal
+state publication emits the changed sample when publication is enabled. Service
+reads do not enable polling or send configuration writes.
+
+Read `~/capabilities.telemetry` to select the supported endpoint and its
+`read_mode`; command support alone does not imply a readable channel:
+
+| `read_mode` | Getter behavior | Current examples |
+| --- | --- | --- |
+| `query` | Request a post-call fresh device sample | O6 configured speeds/accelerations/current limits; O30 motion times |
+| `command_response` | Return the last valid device write response, without a new query | L6 configured speeds |
+| `command_cache` | Return the last valid locally dispatched command sample, without device confirmation or a new query | L30 configured speeds/current limits |
+
+For L20/L20Lite, `get_effort_limits` reads **current measured load**, not a saved
+limit; retain `device_measured=true` and the SDK's raw unit/scale explanation.
+ROS passes through SDK metadata for every model and does not infer physical
+torque from this method name.
+
+`state` retains raw values, channel names, units, scale notes, confidence and
+`meta`. For cache/response modes, collection time and sequence remain those of
+the original sample; age and staleness describe it at read time. A successful
+cached read may have `meta.stale=true`. `device_queried` describes the channel's
+capability, not the origin of every published sample; use `meta.origin` for the
+particular sample. In command-response/cache modes the success message states
+that no device query was performed; branch on structured metadata, not that text.
+
+Check `success` before consuming `state`. An unavailable command-derived sample
+returns `unsupported_operation`; the service never sends a write to manufacture
+a sample. Runtime firmware rejection keeps the declared endpoint but returns
+`unsupported_firmware` once the SDK disables that optional query. An inactive
+or closing driver returns `device_not_ready`; invalid timeouts return
+`validation`; SDK timeout/protocol errors retain their stable codes. `timeout_s`
+must be finite and positive, with the management-worker margin fitting inside
+`shutdown_timeout_s`. No firmware-version gate is added. Queries still share SDK
+device/bus scheduling with commands, so use them on demand within the bus budget.
 
 ## L6 Limit Compensation
 
@@ -190,5 +249,7 @@ does not trigger device I/O or enable a new polling rate. Check `meta.valid`,
 `meta.stale`, `meta.origin` and connection generation before using the sample.
 The configuration is not a physical measurement (`device_measured=false`).
 
-The new `GetRawValues` service requires rebuilding `linkerbot_hand_msgs` and its
-dependent driver. Existing message and service field definitions are unchanged.
+The `GetRawValues` service requires rebuilding `linkerbot_hand_msgs` and its
+dependent driver. Adding its endpoints does not change service fields; the
+separate command-capability wire change described above requires rebuilding all
+capability consumers as well.

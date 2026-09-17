@@ -59,6 +59,32 @@ ros2 topic echo /linkerbot_hand/command/status
 `ACKNOWLEDGED`。Topic 类型是 `HandCommandStatusBatch`，直接订阅时逐条处理 `statuses[]`；
 机械到位由 `state/angles` 的新鲜反馈判断。
 
+## 按需读取配置与限制值
+
+先查看 capability 的 telemetry `read_mode` 和服务列表。驱动只为支持的通道创建服务，
+调用时应处于 active：
+
+```bash
+ros2 service list -t
+ros2 service call /linkerbot_hand/get_configured_speeds \
+  linkerbot_hand_msgs/srv/GetRawValues '{timeout_s: 0.5}'
+```
+
+O6 的该服务会主动查询配置速度，L6 返回最近一次有效速度写回包，L30 返回本地命令缓存。
+后两者不发送查询，没有有效样本时返回 `success=false`、`error_code=unsupported_operation`。
+成功后仍需检查 `state.meta.valid/stale/age_s/origin/connection_generation`；服务不会把旧
+缓存的时刻或 sequence 改成新的。原值在 `state.raw`，解释在
+`state.raw_unit/raw_scale_note/unit_confidence`。
+
+同一服务类型还用于 `get_configured_accelerations`、`get_current_limits`、
+`get_effort_limits`、`get_motion_times` 和 `get_limit_compensations`，可用性以 capability
+为准。L20/L20Lite 的 `get_effort_limits` 返回当前实测负载。主动查询的样本也会经正常
+状态发布流程送到对应 `~/state/<semantic>`；仅订阅话题不会查询，也不会自动开启轮询。
+
+Python 业务节点可创建 `GetRawValues` client 并使用 `call_async()` 处理响应；不要在单线程
+executor 的 callback 内阻塞等待服务响应。自定义异步 callback 等待时，
+也应将服务 client 放入独立 callback group，避免同组互斥阻止响应处理。
+
 ## 常驻 Python 客户端
 
 ```python

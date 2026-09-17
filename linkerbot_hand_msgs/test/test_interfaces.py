@@ -1,6 +1,8 @@
 from builtin_interfaces.msg import Time
+from rclpy.serialization import deserialize_message, serialize_message
 
 from linkerbot_hand_msgs.msg import (
+    CommandCapability,
     HandCapabilities,
     HandCommandStatus,
     HandCommandStatusBatch,
@@ -15,6 +17,27 @@ from linkerbot_hand_msgs.msg import (
     TactileMatrix,
 )
 from linkerbot_hand_msgs.srv import Recover, SetRawValues, SubmitCommand
+
+
+def test_capabilities_serialize_feedback_support_independently_of_ack():
+    message = HandCapabilities(
+        commands=[
+            CommandCapability(
+                semantic="angles", ack_support="unsupported", returns_current_state=True
+            ),
+            CommandCapability(
+                semantic="limit_compensations",
+                ack_support="supported",
+                returns_current_state=False,
+            ),
+        ]
+    )
+
+    decoded = deserialize_message(serialize_message(message), HandCapabilities)
+
+    assert decoded == message
+    assert decoded.commands[0].returns_current_state
+    assert not decoded.commands[1].returns_current_state
 
 
 def test_joint_command_requires_an_explicit_value_representation():

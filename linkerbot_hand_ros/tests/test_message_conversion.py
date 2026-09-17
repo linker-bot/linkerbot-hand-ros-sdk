@@ -9,6 +9,7 @@ from linkerbot_hand import (
     AngleSample,
     CommandFamily,
     CommandHandle,
+    CommandSemantic,
     ConfiguredAccelerationSample,
     ConfiguredSpeedSample,
     CurrentLimitSample,
@@ -113,6 +114,11 @@ def test_all_model_capabilities_project_without_a_ros_model_table(model):
         len(command.raw_ranges) == len(command.channel_names)
         for command in message.commands
     )
+    for sdk_command, ros_command in zip(
+        capabilities.commands, message.commands, strict=True
+    ):
+        assert ros_command.returns_current_state is sdk_command.returns_current_state
+        assert ros_command.ack_support == sdk_command.ack_support.value
     assert [telemetry.semantic for telemetry in message.telemetry] == [
         telemetry.semantic.value for telemetry in capabilities.telemetry
     ]
@@ -123,6 +129,47 @@ def test_all_model_capabilities_project_without_a_ros_model_table(model):
     ):
         expected_ranges = 0 if sdk_value.raw_range is None else len(sdk_value.channels)
         assert len(ros_value.raw_ranges) == expected_ranges
+
+
+@pytest.mark.parametrize(
+    "model,expected",
+    [
+        ("L6", True),
+        ("O6", True),
+        ("L20Lite", True),
+        ("L20", True),
+        ("L30", False),
+        ("O20", False),
+        ("O30", False),
+    ],
+)
+def test_angle_feedback_capability_matches_each_protocol(model, expected):
+    message = capabilities_to_message(_capabilities(model))
+    angles = next(item for item in message.commands if item.semantic == "angles")
+
+    assert angles.returns_current_state is expected
+
+
+@pytest.mark.parametrize("model", ["L6", "L30"])
+def test_current_state_feedback_is_projected_without_model_or_ack_inference(model):
+    capabilities = _capabilities(model)
+    original = capabilities.command(CommandSemantic.ANGLES)
+    changed = replace(
+        original, returns_current_state=not original.returns_current_state
+    )
+    capabilities = replace(
+        capabilities,
+        commands=tuple(
+            changed if command.semantic is CommandSemantic.ANGLES else command
+            for command in capabilities.commands
+        ),
+    )
+
+    message = capabilities_to_message(capabilities)
+    angles = next(item for item in message.commands if item.semantic == "angles")
+
+    assert angles.returns_current_state is changed.returns_current_state
+    assert angles.ack_support == original.ack_support.value
 
 
 def test_l20_capability_projects_the_corrected_public_model_name():

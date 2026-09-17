@@ -1,4 +1,6 @@
-# Actively read the raw telemetry selected by the service endpoint.
+# Read endpoint-selected raw telemetry according to the SDK read_mode.
+# Queryable channels read the device. Command-derived channels return the last
+# valid response/cache with its original sample metadata, without device I/O.
 float64 timeout_s
 ---
 bool success

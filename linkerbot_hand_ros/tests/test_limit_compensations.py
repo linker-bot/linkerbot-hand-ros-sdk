@@ -104,8 +104,10 @@ def test_limit_interfaces_follow_model_capability_and_lifecycle(rig, model, side
     assert not node._interfaces.commands._subscriptions
     if declared:
         before = builder.latest_runtime.read_count
-        read = node._interfaces.management._get_limit_compensations(
-            GetRawValues.Request(timeout_s=0.2), GetRawValues.Response()
+        read = node._interfaces.management._get_raw_values(
+            TelemetrySemantic.LIMIT_COMPENSATIONS,
+            GetRawValues.Request(timeout_s=0.2),
+            GetRawValues.Response(),
         )
         write = node._interfaces.management._set_raw_values(
             "limit_compensations",
@@ -209,8 +211,10 @@ def test_limit_read_runs_on_worker_and_preserves_metadata(rig, monkeypatch):
         return read(semantic, timeout)
 
     monkeypatch.setattr(runtime, "read", record_read)
-    response = node._interfaces.management._get_limit_compensations(
-        GetRawValues.Request(timeout_s=0.2), GetRawValues.Response()
+    response = node._interfaces.management._get_raw_values(
+        TelemetrySemantic.LIMIT_COMPENSATIONS,
+        GetRawValues.Request(timeout_s=0.2),
+        GetRawValues.Response(),
     )
     assert response.success
     assert threads == ["linkerbot_hand-admin"]
@@ -238,8 +242,10 @@ def test_limit_read_keeps_sdk_error_codes(rig, monkeypatch, error):
         raise error
 
     monkeypatch.setattr(builder.latest_runtime, "read", fail_read)
-    response = node._interfaces.management._get_limit_compensations(
-        GetRawValues.Request(timeout_s=0.2), GetRawValues.Response()
+    response = node._interfaces.management._get_raw_values(
+        TelemetrySemantic.LIMIT_COMPENSATIONS,
+        GetRawValues.Request(timeout_s=0.2),
+        GetRawValues.Response(),
     )
     assert not response.success
     assert response.error_code == error.code.value
@@ -250,8 +256,10 @@ def test_limit_read_keeps_sdk_error_codes(rig, monkeypatch, error):
 def test_limit_read_rejects_invalid_timeout_before_io(rig, timeout):
     node, builder = rig
     activate(node)
-    response = node._interfaces.management._get_limit_compensations(
-        GetRawValues.Request(timeout_s=timeout), GetRawValues.Response()
+    response = node._interfaces.management._get_raw_values(
+        TelemetrySemantic.LIMIT_COMPENSATIONS,
+        GetRawValues.Request(timeout_s=timeout),
+        GetRawValues.Response(),
     )
     assert not response.success and response.error_code == ErrorCode.VALIDATION.value
     assert builder.latest_runtime.read_count == 0

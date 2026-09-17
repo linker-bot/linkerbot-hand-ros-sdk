@@ -11,6 +11,22 @@ section.
 Unreleased
 ----------
 
+* Project SDK ``returns_current_state`` into every ROS command capability and
+  advance the capability schema to ``1.2``. Document angle feedback selection
+  without model inference. The ROSIDL wire change requires rebuilding messages,
+  driver, GUI and external capability consumers together; ACK remains separate.
+
+* Add capability-gated ``get_configured_speeds``,
+  ``get_configured_accelerations``, ``get_current_limits``, ``get_effort_limits``
+  and ``get_motion_times`` services using ``GetRawValues`` and the existing
+  bounded management worker. Share the read path with ``get_limit_compensations``.
+  Queryable channels obtain fresh samples; L6 configured speeds return the last
+  device write response, and L30 configured speeds/current limits return local
+  command cache without device I/O or refreshed timestamps. Retain stable errors,
+  raw units, source, age and staleness, and L20/L20Lite live-load semantics.
+  Document on-demand reads separately from cache-only publication and polling;
+  no extra polling channels or configuration writes are introduced.
+
 * Connect capability-gated L6 limit compensation to the raw command topic,
   ``HandCommandClient.set_limit_compensations`` and a reliable setter service.
   Preserve FIFO admission and command acknowledgement/error reporting.
