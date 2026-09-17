@@ -36,6 +36,7 @@ _FAMILIES = {
     CommandSemantic.STALL_DETECTION_TIMES: CommandFamily.STALL_CONFIGURATION,
     CommandSemantic.STALL_THRESHOLDS: CommandFamily.STALL_CONFIGURATION,
     CommandSemantic.STALL_HOLD_CURRENTS: CommandFamily.STALL_CONFIGURATION,
+    CommandSemantic.LIMIT_COMPENSATIONS: CommandFamily.LIMIT_COMPENSATION,
 }
 _SNAPSHOT_ATTRIBUTES = {
     TelemetrySemantic.ANGLES: "angles",
@@ -54,6 +55,7 @@ _SNAPSHOT_ATTRIBUTES = {
     TelemetrySemantic.STALL_DETECTION_TIMES: "stall_detection_times",
     TelemetrySemantic.STALL_THRESHOLDS: "stall_thresholds",
     TelemetrySemantic.STALL_HOLD_CURRENTS: "stall_hold_currents",
+    TelemetrySemantic.LIMIT_COMPENSATIONS: "limit_compensations",
 }
 
 

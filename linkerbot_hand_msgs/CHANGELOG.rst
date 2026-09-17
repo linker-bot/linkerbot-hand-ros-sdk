@@ -10,6 +10,11 @@ a dated version section and create a new empty ``Unreleased`` section.
 Unreleased
 ----------
 
+* Add ``GetRawValues`` for endpoint-selected active configuration reads, with a
+  complete ``HandTelemetry`` response and stable failure fields. L6 uses it for
+  ``get_limit_compensations``. Existing message/service definitions are unchanged;
+  rebuild this package and dependent drivers to use the new service.
+
 2.0.0 (2026-09-11)
 ------------------
 

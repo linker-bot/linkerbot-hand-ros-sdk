@@ -15,6 +15,7 @@ from linkerbot_hand import (
     EffortLimitSample,
     FaultSample,
     ForceSample,
+    LimitCompensationSample,
     MeasuredSpeedSample,
     MotionTimeSample,
     NormalForceResultantSample,
@@ -51,6 +52,7 @@ RawVectorSample = (
     | StallDetectionTimeSample
     | StallThresholdSample
     | StallHoldCurrentSample
+    | LimitCompensationSample
 )
 
 
@@ -406,6 +408,7 @@ _RAW_VECTOR_SAMPLE_TYPES = (
     StallDetectionTimeSample,
     StallThresholdSample,
     StallHoldCurrentSample,
+    LimitCompensationSample,
 )
 
 __all__ = [

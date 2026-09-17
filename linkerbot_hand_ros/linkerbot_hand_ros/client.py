@@ -37,6 +37,7 @@ _RAW_COMMANDS = (
     "effort_limits",
     "torques",
     "motion_times",
+    "limit_compensations",
 )
 _TERMINAL_STAGES = {
     HandCommandStatus.STAGE_ACKNOWLEDGED,
@@ -280,6 +281,16 @@ class HandCommandClient:
 
     def set_motion_times(self, values: Sequence[float]) -> CommandPublication:
         return self._set_raw("motion_times", values)
+
+    def set_limit_compensations(self, values: Sequence[float]) -> CommandPublication:
+        """Publish raw limit compensation; SDK acceptance uses the bounded FIFO.
+
+        Publication does not imply acceptance or protocol acknowledgement.
+        Use the reliable set_limit_compensations service when the caller needs
+        an immediate admission result, including queue-full rejection.
+        """
+
+        return self._set_raw("limit_compensations", values)
 
     def get_status(self, user_sequence: int) -> HandCommandStatus | None:
         """Return the latest cached SDK stage for one published command."""

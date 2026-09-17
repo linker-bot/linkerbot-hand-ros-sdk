@@ -49,6 +49,7 @@ _RAW_SETTERS = {
     CommandSemantic.STALL_DETECTION_TIMES: "set_stall_detection_times",
     CommandSemantic.STALL_THRESHOLDS: "set_stall_thresholds",
     CommandSemantic.STALL_HOLD_CURRENTS: "set_stall_hold_currents",
+    CommandSemantic.LIMIT_COMPENSATIONS: "set_limit_compensations",
 }
 
 

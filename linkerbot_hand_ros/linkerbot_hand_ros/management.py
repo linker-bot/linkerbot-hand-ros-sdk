@@ -17,7 +17,9 @@ from linkerbot_hand import (
     HandDevice,
     HandError,
     HandSnapshot,
+    TelemetrySemantic,
     TimeoutError,
+    UnsupportedOperationError,
     ValidationError,
 )
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -26,6 +28,7 @@ from rclpy.lifecycle import LifecycleNode
 from linkerbot_hand_msgs.msg import HandRawCommand
 from linkerbot_hand_msgs.srv import (
     GetDeviceInfo,
+    GetRawValues,
     GetStallProtection,
     Recover,
     SetRawValues,
@@ -40,12 +43,20 @@ from .command_router import (
     route_discrete_operation,
     route_raw_command,
 )
-from .conversion import device_info_to_message, stall_protection_to_message
+from .conversion import (
+    device_info_to_message,
+    stall_protection_to_message,
+    telemetry_sample_to_message,
+)
 
 _STALL_SETTERS = {
     "stall_detection_times": CommandSemantic.STALL_DETECTION_TIMES,
     "stall_thresholds": CommandSemantic.STALL_THRESHOLDS,
     "stall_hold_currents": CommandSemantic.STALL_HOLD_CURRENTS,
+}
+_CONFIG_SETTERS = {
+    **_STALL_SETTERS,
+    "limit_compensations": CommandSemantic.LIMIT_COMPENSATIONS,
 }
 
 
@@ -147,6 +158,23 @@ class ManagementInterface:
                         response,
                     ),
                 )
+        if self._capabilities.command(CommandSemantic.LIMIT_COMPENSATIONS) is not None:
+            self._add_service(
+                SetRawValues,
+                "~/set_limit_compensations",
+                lambda request, response: self._set_raw_values(
+                    "limit_compensations", request, response
+                ),
+            )
+        if (
+            self._capabilities.telemetry_channel(TelemetrySemantic.LIMIT_COMPENSATIONS)
+            is not None
+        ):
+            self._add_service(
+                GetRawValues,
+                "~/get_limit_compensations",
+                self._get_limit_compensations,
+            )
         for operation in DiscreteOperation:
             if not getattr(operations, operation.value):
                 continue
@@ -223,6 +251,38 @@ class ManagementInterface:
                 _set_failure(response, error)
             return response
 
+    def _get_limit_compensations(
+        self,
+        request: GetRawValues.Request,
+        response: GetRawValues.Response,
+    ) -> GetRawValues.Response:
+        with self._gate.admit() as admitted:
+            if not self._require_ready(admitted, response):
+                return response
+            try:
+                timeout = self._request_timeout(request.timeout_s)
+                device = self._device()
+                capability = device.get_capabilities().telemetry_channel(
+                    TelemetrySemantic.LIMIT_COMPENSATIONS
+                )
+                if capability is None:
+                    raise UnsupportedOperationError("limit compensation is unsupported")
+                sample = self._worker.call(
+                    "get_limit_compensations",
+                    lambda: device.get_limit_compensations(timeout),
+                    timeout_s=_worker_timeout(timeout),
+                )
+                response.state = telemetry_sample_to_message(
+                    sample,
+                    capability,
+                    ros_now_ns=self._node.get_clock().now().nanoseconds,
+                )
+                response.success = True
+                response.message = "limit compensation refreshed"
+            except Exception as error:
+                _set_failure(response, error)
+            return response
+
     def _recover(
         self,
         request: Recover.Request,
@@ -257,7 +317,7 @@ class ManagementInterface:
             try:
                 routed = route_raw_command(
                     self._device(),
-                    _STALL_SETTERS[name],
+                    _CONFIG_SETTERS[name],
                     HandRawCommand(
                         user_sequence=request.user_sequence,
                         raw=request.raw,

@@ -137,6 +137,7 @@ def test_joint_router_rejects_zero_client_id_before_sdk_submission():
         ),
         (CommandSemantic.STALL_THRESHOLDS, "set_stall_thresholds"),
         (CommandSemantic.STALL_HOLD_CURRENTS, "set_stall_hold_currents"),
+        (CommandSemantic.LIMIT_COMPENSATIONS, "set_limit_compensations"),
     ],
 )
 def test_raw_router_recovers_integer_protocol_values_from_ros_float64(

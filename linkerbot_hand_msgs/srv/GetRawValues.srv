@@ -1,0 +1,7 @@
+# Actively read the raw telemetry selected by the service endpoint.
+float64 timeout_s
+---
+bool success
+HandTelemetry state
+string error_code
+string message

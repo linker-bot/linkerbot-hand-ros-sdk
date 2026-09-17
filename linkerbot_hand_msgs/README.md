@@ -45,3 +45,10 @@ SDK capability 定义的 `0..100` 映射。屈伸轴为 `0=弯曲，100=伸直`�
 
 See [CHANGELOG.rst](CHANGELOG.rst) for interface changes. Every pull request
 that changes a public message or service must update its `Unreleased` section.
+
+`GetRawValues` performs an active read chosen by its service endpoint, currently
+`~/get_limit_compensations` on L6. It accepts `timeout_s` and returns `success`,
+a complete `HandTelemetry state`, and stable `error_code` / `message` fields.
+Raw values, units, confidence and sample metadata remain separate. Rebuild the
+message package and dependent driver when adding this service type; no existing
+message or service fields change.

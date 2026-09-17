@@ -11,6 +11,15 @@ section.
 Unreleased
 ----------
 
+* Connect capability-gated L6 limit compensation to the raw command topic,
+  ``HandCommandClient.set_limit_compensations`` and a reliable setter service.
+  Preserve FIFO admission and command acknowledgement/error reporting.
+
+* Add an active ``get_limit_compensations`` service and cached
+  ``state/limit_compensations`` telemetry, retaining raw counts, units, unknown
+  physical scale and sample metadata. Document queue-full handling, lifecycle
+  rejection and the distinction between publication, admission and protocol ACK.
+
 * Isolate HandCommandClient reception from application callbacks and add
   awaitable readiness/status waits for single-threaded ROS executors. Bound
   waits with steady time and release them on cancellation or client destruction;

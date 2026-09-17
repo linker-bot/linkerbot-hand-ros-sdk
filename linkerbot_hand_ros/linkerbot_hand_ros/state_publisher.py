@@ -51,6 +51,7 @@ _SAMPLE_ATTRIBUTES = {
     TelemetrySemantic.FAULTS: "faults",
     TelemetrySemantic.VOLTAGES: "voltages",
     TelemetrySemantic.MOTION_TIMES: "motion_times",
+    TelemetrySemantic.LIMIT_COMPENSATIONS: "limit_compensations",
 }
 _STALL_ATTRIBUTES = (
     "stall_detection_times",

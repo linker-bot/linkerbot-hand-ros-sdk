@@ -70,9 +70,12 @@ ros2 topic pub --once /linkerbot_hand/command/angles \
 | `~/command/effort_limits` | 未确认物理单位的 effort 上限 |
 | `~/command/torques` | 只有 capability 确认为真实扭矩时存在 |
 | `~/command/motion_times` | 协议 motion-time 配置 |
+| `~/command/limit_compensations` | 逐关节限位补偿原值，当前仅 L6 声明 |
 
-驱动 active 后只创建 capability 支持的订阅。所有连续命令使用
-best-effort + keep-last(1)，SDK 内部仍执行 per-family latest-wins。
+驱动 active 后只创建 capability 支持的订阅。命令 Topic 使用
+best-effort + keep-last(1)，不保证每条发布都进入 SDK。SDK 中角度、速度、电流上限、
+effort 上限和扭矩使用独立 latest slot；加速度、运动时间、限位补偿属于有界 FIFO 配置。
+需要明确接纳结果的低频限位补偿配置优先使用下方可靠服务。
 
 ## 命令阶段
 
@@ -136,6 +139,7 @@ device_measured, device_queried, meta
 - `~/state/faults`
 - `~/state/voltages`
 - `~/state/motion_times`
+- `~/state/limit_compensations`
 - `~/state/force`（标量 force profile）
 
 `raw_unit/raw_scale_note` 只是 capability 说明。ROS 不将 count 自动换算为 RPM、mA、N.m；
@@ -160,6 +164,8 @@ thresholds 和 hold currents 三个 raw 样本及独立元数据。协议范围�
 | `~/set_stall_detection_times` | `SetRawValues` | 非阻塞提交 raw 配置 |
 | `~/set_stall_thresholds` | `SetRawValues` | 非阻塞提交 raw 配置 |
 | `~/set_stall_hold_currents` | `SetRawValues` | 非阻塞提交 raw 配置 |
+| `~/get_limit_compensations` | `GetRawValues` | 主动查询限位补偿原值、单位说明及采集元数据 |
+| `~/set_limit_compensations` | `SetRawValues` | 非阻塞提交 FIFO 配置，明确返回接纳或队列满 |
 | `~/save_parameters` | `SubmitCommand` | capability 支持时持久化配置；有协议 ACK 的设备等待明确确认 |
 | `~/clear_faults` | `SubmitCommand` | 独立有界 FIFO 的清错命令 |
 | `~/enable` / `~/disable` / `~/calibrate` | `SubmitCommand` | capability 支持时提交 |
@@ -181,6 +187,43 @@ current=`C7`。ROS 只收发 raw；当前资料给出的解释分别为 `1000/25
 主动读取在独立、有界 admin worker 中执行，不阻塞控制 callback。setter/离散服务的
 `accepted=true` 仅表示进入 SDK，后续阶段看 `/command/status`。服务错误通过稳定
 `error_code` 返回，调用方不能解析 message 文本分类。
+
+## L6 限位补偿
+
+入口按 command/telemetry capability 创建，当前只有 L6 声明。协议 `0x38` 携带六个
+`0..255` 整数，顺序为 `thumb_flex`、`thumb_abd`、`index`、`middle`、`ring`、`pinky`。
+单位为原始 `count`，物理比例和正负方向未知；ROS 不换算成角度或百分比。
+
+`HandCommandClient.set_limit_compensations(values)` 会校验已确认身份的 capability、
+驱动 active、长度、整数与范围，再发布到 `~/command/limit_compensations`。
+返回 `CommandPublication` 只说明消息已发布。Topic 沿用 best-effort、keep-last(1)；
+在 SDK 接纳前发生的拒绝记入 diagnostics，此时没有 command handle，也不会产生该命令
+的状态。需要逐次确认接纳时，使用可靠的 `~/set_limit_compensations` 服务。
+
+SDK 接纳后，`CommandFamily.LIMIT_COMPENSATION` 与其他 FIFO 配置、离散操作共用
+`discrete_queue_capacity` 限定的有界队列，保持顺序，不使用新值覆盖待执行旧值。
+队列满时 setter 服务返回 `accepted=false`、`error_code=queue_full`；
+`accepted=true` 只表示已入队，需继续观察 `~/command/status` 的 `ACKNOWLEDGED` 或
+`FAILED`。L6 要求六字节精确回显才确认成功；不会隐式调用 `save_parameters()`。
+服务命令的 `client_id=0`，按响应中的 `command_id` 关联状态；客户端 Topic 命令仍按
+`(client_id, user_sequence)` 关联。
+
+```bash
+ros2 service call /linkerbot_hand/get_limit_compensations \
+  linkerbot_hand_msgs/srv/GetRawValues '{timeout_s: 0.5}'
+```
+
+查询在有界 admin worker 执行。成功响应的 `state` 是 `HandTelemetry`，保留 raw、关节
+名称、`raw_unit`、`raw_scale_note`、`unit_confidence` 和 `meta`。失败返回 SDK 稳定
+错误码；旧固件连续失败达到可选查询降级条件后返回 `unsupported_firmware`，不按固件
+版本限制连接。inactive 时服务返回 `device_not_ready`。
+
+`~/state/limit_compensations` 发布变化后的配置缓存及有效性，包括成功查询和经验证的
+写响应。订阅该 Topic 不触发设备 I/O，也不增加轮询频率参数；使用者须检查 `meta.valid`、
+`meta.stale`、来源及连接代次。这是配置数据，`device_measured=false`。
+
+新增 `GetRawValues` 服务后需要重新构建 `linkerbot_hand_msgs` 及依赖它的驱动；已有消息
+和服务的字段定义保持不变。
 
 ## Diagnostics
 

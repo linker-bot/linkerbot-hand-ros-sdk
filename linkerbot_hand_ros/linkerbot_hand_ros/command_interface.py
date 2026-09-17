@@ -48,6 +48,7 @@ _RAW_COMMANDS = (
     CommandSemantic.EFFORT_LIMITS,
     CommandSemantic.TORQUES,
     CommandSemantic.MOTION_TIMES,
+    CommandSemantic.LIMIT_COMPENSATIONS,
 )
 _STATUS_BATCH_CAPACITY = 512
 

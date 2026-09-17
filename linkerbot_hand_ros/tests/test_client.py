@@ -159,6 +159,64 @@ def test_wait_for_terminal_status_uses_sdk_stage_not_mechanical_arrival(client_r
     assert result[0].stage == HandCommandStatus.STAGE_DISPATCHED
 
 
+def test_limit_compensation_client_preserves_raw_and_waits_for_ack(client_rig):
+    client, _angle, raw = client_rig
+    assert client.is_ready("limit_compensations")
+    publication = client.set_limit_compensations([0, 1, 2, 3, 4, 255])
+    message = raw["limit_compensations"].messages[-1]
+    assert list(message.raw) == [0, 1, 2, 3, 4, 255]
+    assert message.client_id == publication.client_id
+    assert message.user_sequence == publication.user_sequence
+    assert message.publisher_stamp == publication.publisher_stamp
+    future = client.wait_for_terminal_status_async(publication.user_sequence, 1.0)
+    for stage in (
+        HandCommandStatus.STAGE_DISPATCHED,
+        HandCommandStatus.STAGE_ACKNOWLEDGED,
+    ):
+        client._update_status(
+            HandCommandStatus(
+                client_id=publication.client_id,
+                user_sequence=publication.user_sequence,
+                command_id=1,
+                family="limit_compensation",
+                stage=stage,
+                ack_support=HandCommandStatus.ACK_SUPPORTED,
+            )
+        )
+        client._poll_waits()
+        assert future.done() == (stage == HandCommandStatus.STAGE_ACKNOWLEDGED)
+    assert future.result().stage == HandCommandStatus.STAGE_ACKNOWLEDGED
+
+
+@pytest.mark.parametrize(
+    "values", ([0] * 5, [256] * 6, [-1] * 6, [0.5] * 6, [float("nan")] * 6)
+)
+def test_limit_compensation_client_rejects_invalid_raw(client_rig, values):
+    client, _angle, raw = client_rig
+    with pytest.raises(ValueError):
+        client.set_limit_compensations(values)
+    assert not raw["limit_compensations"].messages
+
+
+def test_limit_compensation_client_rejects_inactive_and_unsupported(client_rig):
+    client, angle, raw = client_rig
+    angle.subscriptions = 0
+    assert not client.is_ready("limit_compensations")
+    with pytest.raises(RuntimeError, match="not active"):
+        client.set_limit_compensations([0] * 6)
+    capability = get_declared_capabilities("o6", side="right")
+    client._update_capabilities(
+        capabilities_to_message(
+            replace(capability, identity=replace(capability.identity, verified=True))
+        )
+    )
+    angle.subscriptions = 1
+    assert not client.is_ready("limit_compensations")
+    with pytest.raises(RuntimeError, match="does not declare limit_compensations"):
+        client.set_limit_compensations([0] * 6)
+    assert not raw["limit_compensations"].messages
+
+
 def test_status_cache_ignores_another_client_with_the_same_sequence(client_rig):
     client, _angle, _raw = client_rig
     other = HandCommandClient(client._node, client_id=202)

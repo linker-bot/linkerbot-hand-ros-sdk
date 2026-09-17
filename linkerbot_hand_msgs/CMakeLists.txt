@@ -38,6 +38,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/TransportCapability.msg"
   "msg/VersionField.msg"
   "srv/GetDeviceInfo.srv"
+  "srv/GetRawValues.srv"
   "srv/GetStallProtection.srv"
   "srv/Recover.srv"
   "srv/SetRawValues.srv"
