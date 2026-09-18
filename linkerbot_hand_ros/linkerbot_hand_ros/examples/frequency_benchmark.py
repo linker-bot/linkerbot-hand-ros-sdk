@@ -22,7 +22,10 @@ from linkerbot_hand_msgs.msg import (
     HandCommandStatus,
     HandCommandStatusBatch,
     HandJointState,
+    HandNormalForceResultant,
+    HandTactileSensorState,
     HandTactileState,
+    HandTelemetry,
 )
 from linkerbot_hand_ros.benchmark import (
     BenchmarkMeasurements,
@@ -146,6 +149,7 @@ class FrequencyBenchmarkNode(Node):
         self.command_events: list[CommandEvent] = []
         self.diagnostic_observations: list[DiagnosticObservation] = []
         self._observation_subscriptions = []
+        self._force_channels: tuple[str, ...] = ()
 
     def start_observing(self) -> None:
         """Subscribe to high-rate data after capability discovery completes."""
@@ -154,17 +158,11 @@ class FrequencyBenchmarkNode(Node):
             return
         subscriptions = []
         try:
-            specifications = (
+            specifications = [
                 (
                     HandJointState,
                     f"{self.driver_name}/state/angles",
                     self._on_angles,
-                    STATE_QOS,
-                ),
-                (
-                    HandTactileState,
-                    f"{self.driver_name}/state/tactile",
-                    self._on_tactile,
                     STATE_QOS,
                 ),
                 (
@@ -179,7 +177,49 @@ class FrequencyBenchmarkNode(Node):
                     self._on_diagnostics,
                     STATE_QOS,
                 ),
-            )
+            ]
+            force = self.command_client.telemetry_capability("force")
+            if force is not None:
+                self._force_channels = tuple(force.channel_names)
+                if force.payload_projection == "tactile_matrix":
+                    specifications.append(
+                        (
+                            HandTactileState,
+                            f"{self.driver_name}/state/tactile",
+                            self._on_tactile,
+                            STATE_QOS,
+                        )
+                    )
+                elif force.payload_projection == "tactile_descriptor":
+                    specifications.extend(
+                        (
+                            (
+                                HandTactileSensorState,
+                                f"{self.driver_name}/state/tactile_sensors",
+                                self._on_tactile_sensors,
+                                STATE_QOS,
+                            ),
+                            (
+                                HandNormalForceResultant,
+                                f"{self.driver_name}/state/normal_force_resultant",
+                                self._on_force_resultant,
+                                STATE_QOS,
+                            ),
+                        )
+                    )
+                elif force.payload_projection == "raw_vector":
+                    specifications.append(
+                        (
+                            HandTelemetry,
+                            f"{self.driver_name}/state/force",
+                            self._on_scalar_force,
+                            STATE_QOS,
+                        )
+                    )
+                else:
+                    raise RuntimeError(
+                        f"未知触觉投影: {force.payload_projection!r}; 请同步重建消息包和驱动"
+                    )
             for message_type, topic, callback, qos in specifications:
                 subscriptions.append(
                     self.create_subscription(message_type, topic, callback, qos)
@@ -227,20 +267,61 @@ class FrequencyBenchmarkNode(Node):
         )
 
     def _on_tactile(self, message: HandTactileState) -> None:
-        structurally_valid = bool(message.fingers) and all(
-            matrix.rows > 0
-            and matrix.columns > 0
-            and len(matrix.raw) == matrix.rows * matrix.columns
-            for matrix in message.fingers
+        structurally_valid = (
+            tuple(matrix.finger_name for matrix in message.fingers)
+            == self._force_channels
+            and bool(message.fingers)
+            and all(
+                matrix.rows > 0
+                and matrix.columns > 0
+                and len(matrix.raw) == matrix.rows * matrix.columns
+                for matrix in message.fingers
+            )
         )
+        self._record_force_event("tactile", message.meta, structurally_valid)
+
+    def _on_tactile_sensors(self, message: HandTactileSensorState) -> None:
+        sensors = message.sensors
+        valid = (
+            bool(sensors)
+            and tuple(sensor.finger_name for sensor in sensors) == self._force_channels
+            and tuple(sensor.selected_sensor for sensor in sensors)
+            == tuple(range(1, len(sensors) + 1))
+            and any(sensor.available for sensor in sensors)
+            and all(_complete_sensor(sensor) for sensor in sensors)
+        )
+        # A complete five-identity message counts once, not once per field,
+        # finger, CAN fragment, or derived resultant publication.
+        self._record_force_event("tactile", message.meta, valid)
+
+    def _on_force_resultant(self, message: HandNormalForceResultant) -> None:
+        valid = (
+            bool(message.finger_names)
+            and tuple(message.finger_names) == self._force_channels
+            and len(message.normal_force_resultant) == len(self._force_channels)
+            and len(message.units) == len(self._force_channels)
+            and all(math.isfinite(value) for value in message.normal_force_resultant)
+        )
+        self._record_force_event("normal_force_resultant", message.meta, valid)
+
+    def _on_scalar_force(self, message: HandTelemetry) -> None:
+        valid = (
+            bool(message.channel_names)
+            and tuple(message.channel_names) == self._force_channels
+            and len(message.raw) == len(self._force_channels)
+            and all(math.isfinite(value) for value in message.raw)
+        )
+        self._record_force_event("tactile", message.meta, valid)
+
+    def _record_force_event(self, channel, meta, structurally_valid):
         self.state_events.append(
             StateEvent(
-                channel="tactile",
+                channel=channel,
                 observed_at=time.monotonic(),
-                sequence=message.meta.sequence,
-                generation=message.meta.connection_generation,
-                valid=message.meta.valid and structurally_valid,
-                stale=message.meta.stale,
+                sequence=meta.sequence,
+                generation=meta.connection_generation,
+                valid=meta.valid and structurally_valid,
+                stale=meta.stale,
             )
         )
 
@@ -319,6 +400,28 @@ class FrequencyBenchmarkNode(Node):
         for subscription in self._observation_subscriptions:
             self.destroy_subscription(subscription)
         self._observation_subscriptions.clear()
+
+
+def _complete_sensor(sensor) -> bool:
+    if not sensor.available:
+        return (
+            not sensor.raw_bytes and not sensor.fields and sensor.total_data_length == 0
+        )
+    if not sensor.fields or len(sensor.raw_bytes) != sensor.total_data_length:
+        return False
+    offset = 0
+    for field in sensor.fields:
+        if (
+            field.byte_offset != offset
+            or field.byte_length <= 0
+            or field.element_count <= 0
+            or field.component_count not in (1, 3)
+            or len(field.values) != field.element_count * field.component_count
+            or any(not math.isfinite(value) for value in field.values)
+        ):
+            return False
+        offset += field.byte_length
+    return offset == sensor.total_data_length
 
 
 def _spin_until_future(node: Node, future: Future, timeout_s: float) -> None:
@@ -517,6 +620,8 @@ def _log_result(
         f"tactile_read={_format_rate(result.tactile_read_completion_hz)}, "
         f"tactile_cache={_format_rate(result.tactile_cache_update_hz)}, "
         f"tactile_ros={_format_rate(result.tactile_ros_publish_hz)}, "
+        f"resultant_cache={_format_rate(result.normal_force_resultant_cache_update_hz)}, "
+        f"resultant_ros={_format_rate(result.normal_force_resultant_ros_publish_hz)}, "
         f"command_p95={p95}, failed={result.failed_commands}, "
         f"superseded={result.superseded_commands}"
     )

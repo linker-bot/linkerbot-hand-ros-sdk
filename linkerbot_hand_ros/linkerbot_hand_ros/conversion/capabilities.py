@@ -22,7 +22,7 @@ from linkerbot_hand import (
 
 from linkerbot_hand_msgs import msg as ros_messages
 
-CAPABILITY_SCHEMA_REVISION = "1.2"
+CAPABILITY_SCHEMA_REVISION = "1.3"
 
 
 def capabilities_to_message(
@@ -71,6 +71,26 @@ def _identity_to_message(
         serial_number=value.serial_number or "",
         has_product_code=value.product_code is not None,
         product_code=value.product_code or "",
+        has_protocol_name=value.protocol_name is not None,
+        protocol_name=value.protocol_name or "",
+        has_protocol_version=value.protocol_version is not None,
+        protocol_version=value.protocol_version or "",
+        has_power_supply_range=value.power_supply_range is not None,
+        power_supply_range=value.power_supply_range or "",
+        has_microcontroller_uid=value.microcontroller_uid is not None,
+        microcontroller_uid=value.microcontroller_uid or "",
+        has_adapter_board_version=value.adapter_board_version is not None,
+        adapter_board_version=value.adapter_board_version or "",
+        has_control_board_version=value.control_board_version is not None,
+        control_board_version=value.control_board_version or "",
+        has_bootloader_version=value.bootloader_version is not None,
+        bootloader_version=value.bootloader_version or "",
+        has_build_time=value.build_time is not None,
+        build_time=value.build_time or "",
+        has_supported_interfaces=value.supported_interfaces is not None,
+        supported_interfaces=value.supported_interfaces or "",
+        has_reported_side=value.reported_side is not None,
+        reported_side="" if value.reported_side is None else value.reported_side.value,
         supported_fields=list(value.supported_fields),
     )
 
@@ -185,6 +205,7 @@ def _telemetry_to_message(
         shape=list(value.shape),
         raw_ranges=ranges,
         raw_encoding=value.raw_encoding,
+        payload_projection=value.payload_projection.value,
         has_raw_unit=value.raw_unit is not None,
         raw_unit=value.raw_unit or "",
         has_raw_scale_note=value.raw_scale_note is not None,

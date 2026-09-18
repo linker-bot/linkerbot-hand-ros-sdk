@@ -11,6 +11,16 @@ section.
 Unreleased
 ----------
 
+* Preserve O30 extended identity and tactile metadata in ROS, including absent
+  sensors and maximum/requested dimensions. Publish the SDK payload projection
+  and advance schema to ``1.3``. Rebuild all consumers with the changed messages;
+  use ``maximum_rows/maximum_columns`` in place of tactile sensor ``rows/columns``.
+
+* Select benchmark tactile topics by ``payload_projection`` instead of always
+  subscribing to matrices. Count complete descriptor samples once and report
+  resultant cache/publication rates separately. Expose copied telemetry metadata
+  through ``HandCommandClient.telemetry_capability()`` without device I/O.
+
 * Project SDK ``returns_current_state`` into every ROS command capability and
   advance the capability schema to ``1.2``. Document angle feedback selection
   without model inference. The ROSIDL wire change requires rebuilding messages,

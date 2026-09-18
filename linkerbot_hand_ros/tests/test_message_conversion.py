@@ -128,6 +128,7 @@ def test_all_model_capabilities_project_without_a_ros_model_table(model):
         strict=True,
     ):
         expected_ranges = 0 if sdk_value.raw_range is None else len(sdk_value.channels)
+        assert ros_value.payload_projection == sdk_value.payload_projection.value
         assert len(ros_value.raw_ranges) == expected_ranges
 
 
@@ -140,7 +141,6 @@ def test_all_model_capabilities_project_without_a_ros_model_table(model):
         ("L20", True),
         ("L30", False),
         ("O20", False),
-        ("O30", False),
     ],
 )
 def test_angle_feedback_capability_matches_each_protocol(model, expected):
@@ -150,7 +150,7 @@ def test_angle_feedback_capability_matches_each_protocol(model, expected):
     assert angles.returns_current_state is expected
 
 
-@pytest.mark.parametrize("model", ["L6", "L30"])
+@pytest.mark.parametrize("model", ["L6", "L30", "O30"])
 def test_current_state_feedback_is_projected_without_model_or_ack_inference(model):
     capabilities = _capabilities(model)
     original = capabilities.command(CommandSemantic.ANGLES)
@@ -469,7 +469,7 @@ def test_o30_descriptor_force_projects_sensors_and_resultant():
     thumb = sensors[0]
     assert thumb.sensor_type == "TSSP_JZG"
     assert thumb.data_unit == "g"
-    assert (thumb.rows, thumb.columns) == (10, 7)
+    assert (thumb.maximum_rows, thumb.maximum_columns) == (10, 7)
     assert thumb.descriptor == "FnS_U16_1;Fn_U8_70"
     assert thumb.total_data_length == 72
     assert len(thumb.raw_bytes) == 72

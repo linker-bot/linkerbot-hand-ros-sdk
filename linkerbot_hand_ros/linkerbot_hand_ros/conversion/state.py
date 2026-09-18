@@ -315,11 +315,17 @@ def _tactile_sensor_state_message(
         sensors=[
             ros_messages.HandTactileSensor(
                 finger_name=item.metadata.sensor_name,
+                selected_sensor=item.metadata.selected_sensor,
+                available=item.metadata.available,
                 sensor_type=item.metadata.sensor_type,
                 data_unit=item.metadata.data_unit or "",
                 data_range=item.metadata.data_range,
-                rows=item.metadata.maximum_rows,
-                columns=item.metadata.maximum_columns,
+                maximum_rows=item.metadata.maximum_rows,
+                maximum_columns=item.metadata.maximum_columns,
+                requested_rows=item.metadata.requested_rows,
+                requested_columns=item.metadata.requested_columns,
+                valid_data_position_mode=item.metadata.valid_data_position_mode,
+                rectangle_fill=item.metadata.rectangle_fill,
                 descriptor=item.metadata.descriptor_text or "",
                 total_data_length=item.metadata.total_data_length,
                 fields=[

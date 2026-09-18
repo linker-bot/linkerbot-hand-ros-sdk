@@ -44,12 +44,33 @@ response contains current device state usable as feedback. It is independent of
 `ack_support`, is not a target echo, and does not indicate mechanical arrival.
 The `angles` command's flag gates the SDK's `command_feedback_only` policy.
 
-The unreleased capability schema is `1.2`. Adding this field changes the ROSIDL
-types of `CommandCapability` and its enclosing `HandCapabilities`. Rebuild the
+The unreleased capability schema is `1.3`. It includes command feedback support,
+`TelemetryCapability.payload_projection` and extended identity metadata. These
+fields change the ROSIDL types of capabilities and device info. Rebuild the
 message package, driver, GUI and external capability consumers together; a schema
 revision string cannot make old and new wire types compatible. Under this
 repository's release policy, this requires a major release; package versions
 remain at the last release until release preparation.
+
+`HandTactileSensor` now uses `maximum_rows/maximum_columns` in place of
+`rows/columns`, and preserves `selected_sensor`, `available`, requested rows/columns,
+position mode and rectangle fill. Neither maximum nor requested dimensions imply
+the size/order of a descriptor field: use `descriptor`, `fields` and `raw_bytes`.
+Unavailable sensors retain their finger identity with empty fields/bytes; they are
+not zero-force measurements. Five-finger resultants are published only when all
+five expose a scalar `FnS`. No additional device read is performed to derive them.
+
+For the force capability, `payload_projection` selects the publication contract:
+
+| Projection | Topic suffix | Message |
+| --- | --- | --- |
+| `tactile_matrix` | `state/tactile` | `HandTactileState` |
+| `tactile_descriptor` | `state/tactile_sensors` | `HandTactileSensorState` |
+| `tactile_descriptor` with five scalar FnS values | `state/normal_force_resultant` | `HandNormalForceResultant` |
+| `raw_vector` | `state/force` | `HandTelemetry` |
+
+Six current models use matrices; O30 uses descriptors. No current model declares
+scalar force. All projections retain the originating force sample's metadata.
 
 中文约定：普通 `raw` 字段始终表示设备协议原值，不做物理单位换算；`percent` 仅表示
 SDK capability 定义的 `0..100` 映射。屈伸轴为 `0=弯曲，100=伸直`，侧摆和旋转轴的

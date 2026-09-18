@@ -97,6 +97,8 @@ class BenchmarkResult:
     tactile_read_completion_hz: float | None
     tactile_cache_update_hz: float | None
     tactile_ros_publish_hz: float | None
+    normal_force_resultant_cache_update_hz: float | None
+    normal_force_resultant_ros_publish_hz: float | None
     command_interval_p95_ms: float | None
     publish_to_receive_latency: LatencyStats
     receive_to_accept_latency: LatencyStats
@@ -190,6 +192,9 @@ def evaluate_measurements(
     tactile_cache_hz, tactile_publish_hz, tactile_generation_changed = _state_rates(
         measurements.state_events,
         "tactile",
+    )
+    resultant_cache_hz, resultant_publish_hz, resultant_generation_changed = (
+        _state_rates(measurements.state_events, "normal_force_resultant")
     )
     angle_read_hz = _diagnostic_counter_rate(
         measurements.start_diagnostic,
@@ -287,7 +292,11 @@ def evaluate_measurements(
             tactile_publish_hz,
             minimum_tactile,
         )
-    if angle_generation_changed or tactile_generation_changed:
+    if (
+        angle_generation_changed
+        or tactile_generation_changed
+        or resultant_generation_changed
+    ):
         reasons.append("测试期间连接代次发生变化")
     if failed:
         reasons.append(f"存在 {failed} 个 FAILED 命令")
@@ -317,6 +326,8 @@ def evaluate_measurements(
         tactile_read_completion_hz=tactile_read_hz,
         tactile_cache_update_hz=tactile_cache_hz,
         tactile_ros_publish_hz=tactile_publish_hz,
+        normal_force_resultant_cache_update_hz=resultant_cache_hz,
+        normal_force_resultant_ros_publish_hz=resultant_publish_hz,
         command_interval_p95_ms=_interval_p95_ms(measurements.sent_at),
         publish_to_receive_latency=publish_to_receive,
         receive_to_accept_latency=receive_to_accept,

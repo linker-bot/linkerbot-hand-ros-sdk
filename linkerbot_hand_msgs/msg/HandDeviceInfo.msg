@@ -5,6 +5,24 @@ string serial_number
 VersionField pcb_version
 VersionField firmware_version
 VersionField mechanical_version
+VersionField adapter_board_version
+VersionField control_board_version
+VersionField bootloader_version
+bool has_protocol_name
+string protocol_name
+bool has_protocol_version
+string protocol_version
+bool has_power_supply_range
+string power_supply_range
+bool has_microcontroller_uid
+string microcontroller_uid
+bool has_build_time
+string build_time
+bool has_supported_interfaces
+string supported_interfaces
+# Reported identity evidence; separate from the configured/resolved side.
+bool has_reported_side
+string reported_side
 bool has_product_code
 string product_code
 bool has_sensor_variant

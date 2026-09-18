@@ -32,6 +32,12 @@ def test_benchmark_defers_high_rate_observation_until_capability_discovery():
             subscription in node.subscriptions for subscription in client_subscriptions
         )
 
+        from linkerbot_hand import get_declared_capabilities
+        from linkerbot_hand_ros.conversion import capabilities_to_message
+
+        node.command_client._update_capabilities(
+            capabilities_to_message(get_declared_capabilities("O6", side="right"))
+        )
         node.start_observing()
         subscriptions = tuple(node._observation_subscriptions)
         node.start_observing()

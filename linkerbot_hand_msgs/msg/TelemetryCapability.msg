@@ -3,6 +3,8 @@ string[] channel_names
 uint32[] shape
 NumericRange[] raw_ranges
 string raw_encoding
+# raw_vector, tactile_matrix, or tactile_descriptor; do not infer from model.
+string payload_projection
 bool has_raw_unit
 string raw_unit
 bool has_raw_scale_note

@@ -9,6 +9,14 @@
 当成独立样本。默认目标取首次有效 percent 角度，`angle_amplitude=0`，因此不会自动全开、
 握拳或主动改变姿态。
 
+工具在能力发现完成后根据 force 的 `payload_projection` 选择矩阵或 descriptor 话题。
+O30 同时观察 `state/tactile_sensors` 与 `state/normal_force_resultant`；后者以
+`resultant_cache/resultant_ros` 独立输出，不增加 `tactile_*` 的计数。
+一次 descriptor 消息必须包含能力声明的全部传感器身份；明确缺失的传感器可为空数据，
+畸形、缺指或字段不完整的消息不算有效完整样本。没有 FnS 的传感器仍可测 descriptor 频率，
+此时合力频率无样本。首次元数据读取与缓存后的持续采集成本不同，预热应覆盖首次完整触觉。
+设备单位、真实受压响应和机械到位不由此频率工具证明。
+
 ## 为什么不能只用 `ros2 topic hz`
 
 ROS publish callback 频率、设备采样频率和命令 transport 发送频率不是一个指标。本工具分别
@@ -111,7 +119,8 @@ ros2 run linkerbot_hand_ros frequency_benchmark \
   --duration 180 --repetitions 3
 ```
 
-这里 `30 Hz` 指 30 个完整多指 `HandTactileState`，不是 30 个 CAN frame。若 firmware、
+这里 `30 Hz` 指 30 个完整多指样本：矩阵为 `HandTactileState`，O30 descriptor 为
+`HandTactileSensorState`，不是单指、字段或 CAN frame 的数量。若 firmware、
 传感器或 capability 的事务成本无法支持，polling plan 可能在参数更新时明确拒绝，或运行时
 以 timeout/missed deadline 失败；不得通过提高 ROS publish rate 掩盖。
 

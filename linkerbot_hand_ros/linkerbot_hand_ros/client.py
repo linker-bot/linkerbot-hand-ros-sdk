@@ -8,6 +8,7 @@ import threading
 import time
 from collections import OrderedDict
 from collections.abc import Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 
 from builtin_interfaces.msg import Time
@@ -25,6 +26,7 @@ from linkerbot_hand_msgs.msg import (
     HandCommandStatusBatch,
     HandJointCommand,
     HandRawCommand,
+    TelemetryCapability,
 )
 
 from .driver_readiness import DriverReadiness
@@ -173,6 +175,29 @@ class HandCommandClient:
             if self._capabilities is None:
                 return ()
             return tuple(joint.name for joint in self._capabilities.joints)
+
+    def telemetry_capability(self, semantic: str) -> TelemetryCapability | None:
+        """Return a copy of enabled telemetry metadata, or None if unavailable.
+
+        This reads the last capability message; it does not establish driver
+        readiness or perform a device query.
+        """
+
+        with self._condition:
+            self._require_alive()
+            if (
+                self._capabilities is None
+                or semantic in self._capabilities.firmware_unsupported_telemetry
+            ):
+                return None
+            return next(
+                (
+                    deepcopy(value)
+                    for value in self._capabilities.telemetry
+                    if value.semantic == semantic
+                ),
+                None,
+            )
 
     def is_ready(self, semantic: str = "angles") -> bool:
         """Require verified capabilities and fresh active state of this driver."""

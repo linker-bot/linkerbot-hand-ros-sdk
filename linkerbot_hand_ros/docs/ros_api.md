@@ -43,12 +43,11 @@ To determine whether angle writes can provide feedback, find the `angles` entry
 in `~/capabilities.commands` and read `returns_current_state`. A true value means
 the response contains current state usable as feedback; it does not mean target
 echo, protocol ACK or mechanical arrival. The SDK rejects `command_feedback_only`
-with a nonzero angle rate if this flag is false. Current declarations are true
-for L6/O6/L20Lite/L20 and false for L30/O20/O30; consume the flag rather than
-hard-coding that model list.
+with a nonzero angle rate if this flag is false. Use the connected SDK's declaration;
+the O30 command-feedback fix in Hand issue #148 also changes this value.
 
-Capability schema `1.2` adds this field to `CommandCapability`, changing the
-enclosing `HandCapabilities` ROSIDL type. Rebuild messages, driver, GUI and all
+Capability schema `1.3` includes this field, `payload_projection`, and extended
+identity metadata, changing the ROSIDL types. Rebuild messages, driver, GUI and all
 external capability consumers together. Old and new message builds must not be
 mixed; checking the revision string does not provide wire compatibility.
 
@@ -114,8 +113,29 @@ transition when measuring actual sends.
 | `~/state/<semantic>` | `HandTelemetry` | Protocol-raw typed telemetry/configuration sample |
 | `~/state/force` | `HandTelemetry` | Scalar force when the profile provides it |
 | `~/state/tactile` | `HandTactileState` | One complete multi-finger tactile transaction |
+| `~/state/tactile_sensors` | `HandTactileSensorState` | Complete descriptor tactile sample, including absent sensor identities |
+| `~/state/normal_force_resultant` | `HandNormalForceResultant` | Five scalar FnS values derived from the same descriptor sample, when available |
 | `~/state/stall_protection` | `HandStallProtectionState` | Three independent raw stall settings |
 | `/diagnostics` | `diagnostic_msgs/msg/DiagnosticArray` | Zero-I/O SDK health and transport metrics |
+
+Read the force capability's `payload_projection`: `tactile_matrix` selects
+`state/tactile`, `tactile_descriptor` selects `state/tactile_sensors` and the
+optional resultant projection, and `raw_vector` selects `state/force`. Six current
+models use matrices; O30 uses descriptors; none currently uses scalar force.
+`HandCommandClient.telemetry_capability("force")` returns copied metadata or None
+when absent/disabled; it does not query the device or prove driver readiness.
+
+Sensor `maximum_rows/maximum_columns` replace the old `rows/columns` fields.
+They and `requested_rows/requested_columns` preserve device metadata without
+reshaping fields. Actual byte ranges and element counts come from the descriptor.
+Selector, availability, position mode and rectangle-fill flag are preserved.
+An absent sensor has empty fields/bytes, not fabricated zero measurements. FnS is
+not recomputed by summing matrix cells and is not converted to newtons.
+
+Device info and identity capabilities include adapter/control/bootloader versions,
+protocol name/version, supply range, MCU UID, build time, supported interfaces and
+reported side. Optional values carry presence flags (or VersionField.available);
+reported side is distinct from the configured/resolved side.
 
 `<semantic>` can be `measured_speeds`, `configured_speeds`,
 `configured_accelerations`, `currents`, `current_limits`, `effort_limits`,

@@ -10,6 +10,13 @@ a dated version section and create a new empty ``Unreleased`` section.
 Unreleased
 ----------
 
+* **Breaking wire/source change:** add extended device/identity fields and
+  ``TelemetryCapability.payload_projection``; advance schema to ``1.3``.
+  ``HandTactileSensor.rows/columns`` become ``maximum_rows/maximum_columns``;
+  add selector, availability, requested dimensions, position mode and fill flag.
+  Request dimensions do not describe the actual descriptor field shape.
+  Rebuild all consumers together; the next release remains major. No release here.
+
 * **Breaking wire change:** add ``CommandCapability.returns_current_state`` for
   current-state command feedback, independently of protocol ACK and target
   arrival. This changes the enclosing ``HandCapabilities`` ROSIDL type. Rebuild

@@ -13,11 +13,11 @@ runtime 和总线仲裁；独立进程不共享。
 `returns_current_state`，可判断角度写命令回包是否包含可用作反馈的当前状态。
 该标记与 `ack_support` 独立，不表示目标回显、协议 ACK 或机械到位。
 `angles_hz>0` 时，SDK 会拒绝在此标记为 false 的设备上启用
-`command_feedback_only`。当前 L6/O6/L20Lite/L20 为 true，L30/O20/O30 为 false；
-程序应读取字段，不硬编码型号表。
+`command_feedback_only`。程序应读取所连接 SDK 的能力字段，不硬编码型号表；
+Hand #148 的 O30 角度反馈修复也会更新该值。
 
-能力 schema `1.2` 增加此字段，改变 `CommandCapability` 及包含它的
-`HandCapabilities` 的 ROSIDL 类型。需同时重建消息包、驱动、GUI 和所有外部能力消息
+能力 schema `1.3` 包含此字段、`payload_projection` 和扩展身份信息，改变相关
+ROSIDL 类型。需同时重建消息包、驱动、GUI 和所有外部能力消息
 消费者；新旧构建不能混用，revision 字符串不能解决底层类型不兼容。
 
 | Topic | 类型 | QoS | 内容 |
@@ -34,6 +34,10 @@ runtime 和总线仲裁；独立进程不共享。
 - `firmware_unsupported_telemetry`：当前连接代已探测为固件不支持的查询语义；协议 metadata
   仍保留在 `telemetry` 中，但驱动不会再收到该通道的新样本。
 - `stall_protection`、`transport` 和 `operations`。
+
+`identity` 和 `HandDeviceInfo` 同步包含转接板、控制板、bootloader 版本，协议名称/版本、
+供电范围、MCU UID、编译时间、接口列表和 `reported_side`。缺失项使用 `has_*` 或
+`VersionField.available` 标记；`reported_side` 表示设备身份提供的侧别证据，区别于配置/解析后的 `side`。
 
 SDK 在运行时完成旧固件单功能降级后，驱动会重新发布 transient-local capability。业务节点
 应把新消息视为当前连接代的有效能力，不要只缓存 configure 阶段的 declared capability。
@@ -156,9 +160,27 @@ device_measured, device_queried, meta
 `raw_unit/raw_scale_note` 只是 capability 说明。ROS 不将 count 自动换算为 RPM、mA、N.m；
 协议字段本身以 mA 表示时 raw 数字才直接是 mA。
 
-完整触觉发布到 `~/state/tactile`，类型 `HandTactileState`。每个 `TactileMatrix` 包含
+矩阵触觉发布到 `~/state/tactile`，类型 `HandTactileState`。每个 `TactileMatrix` 包含
 finger name、rows、columns 和 row-major raw；一个消息代表一次完整多指事务，不按关节或
 单指计算频率。
+
+force capability 的 `payload_projection` 决定公共发布契约：
+
+| 投影 | 话题 | 数据 |
+| --- | --- | --- |
+| `tactile_matrix` | `~/state/tactile` | 矩阵触觉，当前六个非 O30 型号 |
+| `tactile_descriptor` | `~/state/tactile_sensors` | O30 五指身份、metadata、fields 和 raw_bytes |
+| `tactile_descriptor` 且五指都有标量 FnS | `~/state/normal_force_resultant` | 从同一 force 样本提取的五指合力，无额外设备查询 |
+| `raw_vector` | `~/state/force` | 标量 force；当前没有型号声明 |
+
+`HandCommandClient.telemetry_capability("force")` 返回能力副本；未收到能力、未声明或固件禁用时
+返回 None，不产生设备 I/O，也不代表驱动已 active。外部节点可直接读取能力消息中的同名字段。
+
+`HandTactileSensor.maximum_rows/maximum_columns` 替代旧 `rows/columns`，同时保留
+`requested_rows/requested_columns`、`selected_sensor`、`available`、
+`valid_data_position_mode`、`rectangle_fill`。最大尺寸和请求尺寸都不能用来强行 reshape
+返回数据，实际字段数量和字节偏移以 descriptor 为准。明确缺失的手指保留身份与空字段/字节，
+不表示零力；缺少任一手指 FnS 时不发布五指合力。合力为设备 FnS 原值，不由矩阵求和或换算成 N。
 
 ## 堵转状态
 
