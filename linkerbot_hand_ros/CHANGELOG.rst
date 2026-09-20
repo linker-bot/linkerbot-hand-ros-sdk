@@ -11,6 +11,17 @@ section.
 Unreleased
 ----------
 
+* Synchronize force_hz shorthand and per-field polling parameters with SDK
+  shared-query scheduling. Report requested, physical-query and achieved rates
+  separately; reset field overrides in the frequency benchmark and document
+  model support, raw quantities and independent timestamps.
+
+* Publish named tactile capabilities and raw field messages with presence,
+  validity, units and encoding; expose cached field capabilities in the client.
+  Preserve physical-query timestamps; scalar updates no longer restamp matrices.
+  Advance schema to 1.4 and handle L20Lite fault flags and torque metadata.
+  Rebuild consumers and install the SDK source containing these new interfaces.
+
 * Preserve O30 extended identity and tactile metadata in ROS, including absent
   sensors and maximum/requested dimensions. Publish the SDK payload projection
   and advance schema to ``1.3``. Rebuild all consumers with the changed messages;

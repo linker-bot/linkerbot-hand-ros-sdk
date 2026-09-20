@@ -8,6 +8,7 @@ from linkerbot_hand import (
     DataAge,
     DataOrigin,
     ErrorInfo,
+    ForceFieldMetrics,
     HealthStatus,
     LifecycleState,
     TransportError,
@@ -46,6 +47,26 @@ def _operational_health() -> HealthStatus:
                 ),
             ),
         ),
+    )
+
+
+def test_shared_force_rates_keep_requested_and_physical_frequency_separate():
+    health = replace(
+        _operational_health(),
+        force_fields=(
+            ForceFieldMetrics("fn", 20, 20, 19.8, "force", True),
+            ForceFieldMetrics("fns", 10, 20, 19.8, "force", True),
+        ),
+    )
+    message = build_diagnostic_status(
+        node_name="/hand", model="O30", active=True, health=health
+    )
+    values = {item.key: item.value for item in message.values}
+    assert values["force_fn_requested_hz"] == "20"
+    assert values["force_fns_requested_hz"] == "10"
+    assert values["force_fn_query_hz"] == values["force_fns_query_hz"] == "20"
+    assert (
+        values["force_fn_query_channel"] == values["force_fns_query_channel"] == "force"
     )
 
 

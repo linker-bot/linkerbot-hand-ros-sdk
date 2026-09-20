@@ -19,6 +19,7 @@ from linkerbot_hand_msgs.msg import (
     HandCapabilities,
     HandDeviceInfo,
     HandFaultStatusState,
+    HandForceField,
     HandJointState,
     HandNormalForceResultant,
     HandStallProtectionState,
@@ -31,6 +32,7 @@ from .conversion import (
     capabilities_to_message,
     device_info_to_message,
     fault_statuses_to_message,
+    force_field_to_message,
     force_sample_to_messages,
     make_angle_message,
     stall_protection_to_message,
@@ -75,6 +77,7 @@ class SnapshotPublisher:
         plain_publishers = []
         lifecycle_publishers = []
         telemetry_publishers = {}
+        force_field_publishers = {}
         try:
             capabilities_publisher = node.create_publisher(
                 HandCapabilities,
@@ -115,6 +118,19 @@ class SnapshotPublisher:
                 telemetry_publishers[semantic] = publisher
                 lifecycle_publishers.append(publisher)
             force_capability = capabilities.telemetry_channel(TelemetrySemantic.FORCE)
+            for field in capabilities.force_fields:
+                # Unknown descriptor support still needs a publisher ready
+                # when discovery finishes. Firmware degradation keeps it alive.
+                if field.query_channel is None:
+                    continue
+                field_publisher = node.create_lifecycle_publisher(
+                    HandForceField,
+                    f"~/state/force_{field.name}",
+                    STATE_QOS,
+                    event_callbacks=HIGH_RATE_PUBLISHER_EVENTS,
+                )
+                force_field_publishers[field.name] = field_publisher
+                lifecycle_publishers.append(field_publisher)
             force_publisher = None
             tactile_publisher = None
             tactile_sensor_publisher = None
@@ -185,6 +201,7 @@ class SnapshotPublisher:
         self._angles_publisher = angles_publisher
         self._telemetry_publishers = telemetry_publishers
         self._force_publisher = force_publisher
+        self._force_field_publishers = force_field_publishers
         self._tactile_publisher = tactile_publisher
         self._tactile_sensor_publisher = tactile_sensor_publisher
         self._force_resultant_publisher = force_resultant_publisher
@@ -298,10 +315,34 @@ class SnapshotPublisher:
 
         force = snapshot.force
         force_capability = self._force_capability
+        if force is not None:
+            for field in force.fields:
+                key = f"force_{field.name}"
+                publisher = self._force_field_publishers.get(field.name)
+                if publisher is not None and self._is_changed(key, field.meta):
+                    publisher.publish(
+                        force_field_to_message(field, ros_now_ns=ros_now_ns)
+                    )
+                    self._mark_published(key, _metadata_signature(field.meta))
+                    publications += 1
+
+        # Legacy projections belong to the native physical query, not the
+        # aggregate's last completed independent scalar query.
+        native_meta = None
+        if force is not None:
+            native_meta = next(
+                (
+                    field.meta
+                    for field in force.fields
+                    if field.query_channel == "force"
+                ),
+                force.meta if not force.fields else None,
+            )
         if (
             force is not None
             and force_capability is not None
-            and self._is_changed("force", force.meta)
+            and native_meta is not None
+            and self._is_changed("force", native_meta)
         ):
             messages = force_sample_to_messages(
                 force,
@@ -340,7 +381,7 @@ class SnapshotPublisher:
                     and self._force_resultant_publisher is not None
                 )
             ):
-                self._mark_published("force", _metadata_signature(force.meta))
+                self._mark_published("force", _metadata_signature(native_meta))
 
         stall_key = tuple(
             None
@@ -389,6 +430,7 @@ class SnapshotPublisher:
             self._lifecycle_publishers = ()
             self._plain_publishers = ()
             self._telemetry_publishers.clear()
+            self._force_field_publishers.clear()
             self._published.clear()
             self._published_capabilities = None
 

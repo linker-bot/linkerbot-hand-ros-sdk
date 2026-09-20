@@ -7,6 +7,9 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CommandCapability.msg"
+  "msg/ForceFieldCapability.msg"
+  "msg/ForceSensorValue.msg"
+  "msg/HandForceField.msg"
   "msg/HandCapabilities.msg"
   "msg/HandCommandStatus.msg"
   "msg/HandCommandStatusBatch.msg"

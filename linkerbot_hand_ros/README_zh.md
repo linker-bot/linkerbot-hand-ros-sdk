@@ -8,6 +8,9 @@ L20、O20、O30 和 L30。ROS 只使用 `linkerbot-hand` 1.x 的唯一公开设�
 
 ## 运行边界
 
+统一触觉字段、全型号支持表和 `force_<字段>_hz` 参数见[触觉指南](docs/zh/force.md)。
+未发布功能需要安装最新 Hand SDK 源码，重建消息包及消费者。
+
 ```text
 业务节点 / HandCommandClient
           | 类型化 Topic、Service、QoS、Lifecycle

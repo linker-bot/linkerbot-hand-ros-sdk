@@ -10,6 +10,10 @@
 握拳或主动改变姿态。
 
 工具在能力发现完成后根据 force 的 `payload_projection` 选择矩阵或 descriptor 话题。
+自动配置会清零所有 `force_<字段>_hz`，再设置 `force_hz`，避免继承旧字段频率
+形成意外额外负载。L20Lite 的 `force_hz` 默认包含 fn 与 fns 两个独立查询；本工具的
+触觉成功率仍统计点阵/descriptor 完整轮次。需要只测点阵时可用
+`force_fn_hz` 手动配置并选择 `--no-configure-driver`。
 O30 同时观察 `state/tactile_sensors` 与 `state/normal_force_resultant`；后者以
 `resultant_cache/resultant_ros` 独立输出，不增加 `tactile_*` 的计数。
 一次 descriptor 消息必须包含能力声明的全部传感器身份；明确缺失的传感器可为空数据，

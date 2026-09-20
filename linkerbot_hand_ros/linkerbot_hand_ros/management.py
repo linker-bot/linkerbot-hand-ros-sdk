@@ -157,7 +157,9 @@ class ManagementInterface:
             self._recover,
         )
         if operations.write_stall_protection:
-            for name in _STALL_SETTERS:
+            for name, semantic in _STALL_SETTERS.items():
+                if self._capabilities.command(semantic) is None:
+                    continue
                 self._add_service(
                     SetRawValues,
                     f"~/set_{name}",

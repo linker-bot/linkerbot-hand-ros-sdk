@@ -4,6 +4,7 @@ import pytest
 from linkerbot_hand import (
     AngleFeedbackPolicy,
     HandSide,
+    UnsupportedFirmwareError,
     UnsupportedOperationError,
     ValidationError,
 )
@@ -40,6 +41,10 @@ def _parameters(**overrides):
         "angle_feedback": "adaptive",
         "speeds_hz": 0.0,
         "force_hz": 0.0,
+        **{
+            f"force_{name}_hz": 0.0
+            for name in ("fn", "fns", "ft", "fts", "fd", "fds", "px")
+        },
         "temperature_hz": 0.0,
         "current_hz": 0.0,
         "faults_hz": 0.0,
@@ -105,7 +110,7 @@ def test_l30_requires_an_empty_side_parameter():
 
 
 def test_configuration_rejects_polling_not_supported_by_capability():
-    with pytest.raises(UnsupportedOperationError, match="cannot poll measured_speeds"):
+    with pytest.raises(UnsupportedOperationError, match="cannot poll speeds"):
         read_driver_configuration(_parameters(speeds_hz=1.0).__getitem__)
 
 
@@ -230,5 +235,5 @@ def test_polling_validation_rejects_a_runtime_disabled_channel():
     assert degraded.telemetry_channel(TelemetrySemantic.FORCE) is not None
     assert not degraded.telemetry_supported(TelemetrySemantic.FORCE)
 
-    with pytest.raises(UnsupportedOperationError, match="cannot poll force"):
+    with pytest.raises(UnsupportedFirmwareError, match="cannot poll force"):
         validate_polling_plan(degraded, plan)

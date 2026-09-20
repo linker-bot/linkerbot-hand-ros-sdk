@@ -78,6 +78,18 @@ def client_rig(monkeypatch):
         rclpy.try_shutdown()
 
 
+def test_force_field_capability_is_a_copied_zero_io_view(client_rig):
+    client, _angle, _raw = client_rig
+    field = client.force_field_capability("fn")
+    assert field.support_known and field.supported
+    assert field.query_channel == "force" and field.shared_fields == ["fn"]
+    field.shared_fields.append("fns")
+    assert client.force_field_capability("fn").shared_fields == ["fn"]
+    assert not client.force_field_capability("fns").supported
+    with pytest.raises(ValueError):
+        client.force_field_capability("FN")
+
+
 def test_percent_and_raw_angles_use_one_typed_topic(client_rig):
     client, angle, _raw = client_rig
     percent = client.set_percent_angles([100, 50, 100, 100, 100, 100])

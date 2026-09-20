@@ -385,6 +385,10 @@ class FrequencyBenchmarkNode(Node):
             Parameter("angles_hz", value=angle_hz),
             Parameter("angle_feedback", value=angle_feedback),
             Parameter("force_hz", value=tactile_hz),
+            *[
+                Parameter(f"force_{name}_hz", value=0.0)
+                for name in ("fn", "fns", "ft", "fts", "fd", "fds", "px")
+            ],
             Parameter("publish_rate_hz", value=publish_hz),
             Parameter("diagnostic_rate_hz", value=diagnostic_hz),
         ]

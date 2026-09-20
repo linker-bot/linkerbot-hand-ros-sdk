@@ -72,6 +72,10 @@ def _driver_parameters(**overrides):
         "angle_feedback": "adaptive",
         "speeds_hz": 0.0,
         "force_hz": 0.0,
+        **{
+            f"force_{name}_hz": 0.0
+            for name in ("fn", "fns", "ft", "fts", "fd", "fds", "px")
+        },
         "temperature_hz": 0.0,
         "current_hz": 0.0,
         "faults_hz": 0.0,

@@ -8,3 +8,9 @@ bool over_temperature
 bool actuator_abnormal
 bool actuator_offline
 uint8 reserved_bits
+# Only supported_flags have a defined meaning for this protocol.
+string[] supported_flags
+bool load_overload
+bool magnetic_encoder_abnormal
+bool voltage_abnormal
+string[] descriptions

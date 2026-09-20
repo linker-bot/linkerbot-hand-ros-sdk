@@ -10,6 +10,10 @@ a dated version section and create a new empty ``Unreleased`` section.
 Unreleased
 ----------
 
+* Add ForceFieldCapability, ForceSensorValue and HandForceField with independent
+  query metadata. Extend capabilities with named force fields, fault flag support
+  and torque/current presence. Schema 1.4 requires rebuilding all consumers.
+
 * **Breaking wire/source change:** add extended device/identity fields and
   ``TelemetryCapability.payload_projection``; advance schema to ``1.3``.
   ``HandTactileSensor.rows/columns`` become ``maximum_rows/maximum_columns``;

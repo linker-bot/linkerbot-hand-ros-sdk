@@ -7,6 +7,10 @@ This repository contains two independently discoverable ROS 2 packages:
 
 ## Quick Start
 
+The unreleased [unified tactile interface](linkerbot_hand_ros/docs/zh/force.md)
+requires the latest Hand SDK source and a rebuild of ROS messages and consumers.
+The v2.0.0 commands below install the existing release.
+
 The complete dependency chain is
 `linkerbot-transport -> linkerbot-hand -> linkerbot_hand_msgs/linkerbot_hand_ros`.
 Transport and Hand use published Python packages, while both ROS packages are

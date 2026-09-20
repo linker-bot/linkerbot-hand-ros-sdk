@@ -21,6 +21,7 @@ from rclpy.task import Future
 
 from linkerbot_hand_msgs.msg import (
     CommandCapability,
+    ForceFieldCapability,
     HandCapabilities,
     HandCommandStatus,
     HandCommandStatusBatch,
@@ -195,6 +196,26 @@ class HandCommandClient:
                     deepcopy(value)
                     for value in self._capabilities.telemetry
                     if value.semantic == semantic
+                ),
+                None,
+            )
+
+    def force_field_capability(self, name: str) -> ForceFieldCapability | None:
+        """Return cached field metadata, including unknown/unsupported states.
+
+        This performs no device I/O. Read values from state/force_<name>.
+        """
+        if name not in {"fn", "fns", "ft", "fts", "fd", "fds", "px"}:
+            raise ValueError("force field must be fn/fns/ft/fts/fd/fds/px")
+        with self._condition:
+            self._require_alive()
+            if self._capabilities is None:
+                return None
+            return next(
+                (
+                    deepcopy(value)
+                    for value in self._capabilities.force_fields
+                    if value.name == name
                 ),
                 None,
             )

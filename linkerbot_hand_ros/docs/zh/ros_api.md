@@ -16,7 +16,7 @@ runtime 和总线仲裁；独立进程不共享。
 `command_feedback_only`。程序应读取所连接 SDK 的能力字段，不硬编码型号表；
 Hand #148 的 O30 角度反馈修复也会更新该值。
 
-能力 schema `1.3` 包含此字段、`payload_projection` 和扩展身份信息，改变相关
+能力 schema `1.4` 包含此字段、`force_fields`、`payload_projection` 和扩展身份信息，改变相关
 ROSIDL 类型。需同时重建消息包、驱动、GUI 和所有外部能力消息
 消费者；新旧构建不能混用，revision 字符串不能解决底层类型不兼容。
 
@@ -181,6 +181,15 @@ force capability 的 `payload_projection` 决定公共发布契约：
 `valid_data_position_mode`、`rectangle_fill`。最大尺寸和请求尺寸都不能用来强行 reshape
 返回数据，实际字段数量和字节偏移以 descriptor 为准。明确缺失的手指保留身份与空字段/字节，
 不表示零力；缺少任一手指 FnS 时不发布五指合力。合力为设备 FnS 原值，不由矩阵求和或换算成 N。
+
+统一触觉使用 `~/state/force_fn`、`force_fns`、`force_ft`、`force_fts`、
+`force_fd`、`force_fds`、`force_px`，类型为 `HandForceField`。
+支持表、单位、缺失值、共享查询和频率参数见[统一触觉字段](force.md)。
+
+故障解释中的 `supported_flags` 列出当前协议有定义的标志；其他 false 字段不代表
+设备确认正常。L20Lite 保留原字节、未知位以及负载过载、过流、过热、磁编码异常、
+过压/欠压解释，不支持清错。堵转能力的 `has_hold_current/has_hold_torque` 分别
+说明电流/扭矩字段是否存在，不能把 L20Lite C7 标成电流。
 
 ## 堵转状态
 

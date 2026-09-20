@@ -7,6 +7,10 @@
 
 ## 快速启动
 
+未发布的统一触觉支持及各型号对应关系见[触觉字段指南](linkerbot_hand_ros/docs/zh/force.md)。
+该功能需要安装含统一触觉接口的最新 Hand SDK 源码，并重建 ROS 消息和所有消费者；
+下方 v2.0.0 命令对应既有正式版本。
+
 完整依赖链为
 `linkerbot-transport -> linkerbot-hand -> linkerbot_hand_msgs/linkerbot_hand_ros`。
 Transport 和 Hand 使用已发布 Python 包；两个 ROS package 从同一个签名 `v2.0.0` tag

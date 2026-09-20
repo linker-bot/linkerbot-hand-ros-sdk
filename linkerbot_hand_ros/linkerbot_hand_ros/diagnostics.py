@@ -112,6 +112,17 @@ def build_diagnostic_status(
                 _value(f"{prefix}_origin", age.origin.value),
             )
         )
+    for field in health.force_fields:
+        prefix = f"force_{field.field}"
+        status.values.extend(
+            (
+                _value(f"{prefix}_requested_hz", field.requested_hz),
+                _value(f"{prefix}_query_hz", field.query_hz),
+                _value(f"{prefix}_achieved_hz", field.achieved_hz),
+                _value(f"{prefix}_query_channel", field.query_channel),
+                _value(f"{prefix}_supported", field.supported),
+            )
+        )
     return status
 
 

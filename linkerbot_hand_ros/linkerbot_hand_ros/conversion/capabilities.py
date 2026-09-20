@@ -22,7 +22,7 @@ from linkerbot_hand import (
 
 from linkerbot_hand_msgs import msg as ros_messages
 
-CAPABILITY_SCHEMA_REVISION = "1.3"
+CAPABILITY_SCHEMA_REVISION = "1.4"
 
 
 def capabilities_to_message(
@@ -43,6 +43,23 @@ def capabilities_to_message(
         ],
         commands=[_command_to_message(value) for value in capabilities.commands],
         telemetry=[_telemetry_to_message(value) for value in capabilities.telemetry],
+        force_fields=[
+            ros_messages.ForceFieldCapability(
+                name=value.name,
+                support_known=value.supported is not None,
+                supported=value.supported is True,
+                query_channel=""
+                if value.query_channel is None
+                else value.query_channel.value,
+                shared_fields=list(value.shared_fields),
+                sensor_names=list(value.sensor_names),
+                raw_unit=value.raw_unit or "",
+                raw_encoding=value.raw_encoding or "",
+                raw_scale_note=value.raw_scale_note or "",
+                firmware_unsupported=value.firmware_unsupported,
+            )
+            for value in capabilities.force_fields
+        ],
         firmware_unsupported_telemetry=[
             value.value for value in capabilities.firmware_unsupported_telemetry
         ],
@@ -222,17 +239,20 @@ def _telemetry_to_message(
         device_measured=value.device_measured,
         device_queried=value.device_queried,
         decoded_statuses=value.decoded_statuses,
+        force_fields=list(value.force_fields),
     )
 
 
 def _stall_field_to_message(
-    value: StallFieldCapability,
+    value: StallFieldCapability | None,
     *,
     semantic: TelemetrySemantic,
     channels: tuple[str, ...],
     read_supported: bool,
     write_supported: bool,
 ) -> ros_messages.StallFieldCapability:
+    if value is None:
+        return ros_messages.StallFieldCapability(semantic=semantic.value)
     return ros_messages.StallFieldCapability(
         semantic=semantic.value,
         channel_names=list(channels),
@@ -279,6 +299,21 @@ def _stall_to_message(
             channels=value.channels,
             read_supported=value.read_supported,
             write_supported=value.write_supported,
+        ),
+        has_hold_current=value.hold_current is not None,
+        # Keep the tactile driver usable with both the current SDK main and
+        # SDKs that add a model-specific post-stall torque output.
+        has_hold_torque=getattr(value, "hold_torque", None) is not None,
+        hold_torque=(
+            _stall_field_to_message(
+                value.hold_torque,
+                semantic=TelemetrySemantic("stall_hold_torques"),
+                channels=value.channels,
+                read_supported=value.read_supported,
+                write_supported=value.write_supported,
+            )
+            if getattr(value, "hold_torque", None) is not None
+            else ros_messages.StallFieldCapability(semantic="stall_hold_torques")
         ),
         physical_semantics_confidence=(value.physical_semantics_confidence.value),
         safety_range_verified=value.safety_range_verified,

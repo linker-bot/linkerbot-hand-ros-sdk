@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import prod
 
 from linkerbot_hand import (
@@ -14,6 +14,7 @@ from linkerbot_hand import (
     DeviceCapabilities,
     EffortLimitSample,
     FaultSample,
+    ForceFieldSample,
     ForceSample,
     LimitCompensationSample,
     MeasuredSpeedSample,
@@ -202,15 +203,61 @@ def fault_statuses_to_message(
         statuses=[
             ros_messages.HandJointFaultStatus(
                 raw=status.raw,
-                hand_layer_stall=status.hand_layer_stall,
-                actuator_layer_stall=status.actuator_layer_stall,
-                over_current=status.over_current,
-                over_temperature=status.over_temperature,
-                actuator_abnormal=status.actuator_abnormal,
-                actuator_offline=status.actuator_offline,
                 reserved_bits=status.reserved_bits,
+                supported_flags=[
+                    name for name in _FAULT_FLAGS if hasattr(status, name)
+                ],
+                descriptions=list(getattr(status, "descriptions", ())),
+                **{name: getattr(status, name, False) for name in _FAULT_FLAGS},
             )
             for status in sample.statuses
+        ],
+        meta=sample_metadata_to_message(sample.meta, ros_now_ns=ros_now_ns),
+    )
+
+
+_FAULT_FLAGS = (
+    "hand_layer_stall",
+    "actuator_layer_stall",
+    "over_current",
+    "over_temperature",
+    "actuator_abnormal",
+    "actuator_offline",
+    "load_overload",
+    "magnetic_encoder_abnormal",
+    "voltage_abnormal",
+)
+
+
+def force_field_to_message(
+    sample: ForceFieldSample,
+    *,
+    ros_now_ns: int,
+) -> ros_messages.HandForceField:
+    """Preserve per-sensor raw values, absence, validity and source timestamp."""
+    if not isinstance(sample, ForceFieldSample):
+        raise ValidationError("sample must be ForceFieldSample")
+    return ros_messages.HandForceField(
+        name=sample.name,
+        query_channel=sample.query_channel,
+        scale_note=sample.scale_note or "",
+        sensors=[
+            ros_messages.ForceSensorValue(
+                sensor_name=name,
+                present=raw is not None,
+                raw=[] if raw is None else [float(value) for value in raw],
+                valid_values=[] if valid is None else list(valid),
+                unit=unit or "",
+                encoding=encoding or "",
+            )
+            for name, raw, valid, unit, encoding in zip(
+                sample.sensor_names,
+                sample.raw,
+                sample.valid_values,
+                sample.units,
+                sample.encodings,
+                strict=True,
+            )
         ],
         meta=sample_metadata_to_message(sample.meta, ros_now_ns=ros_now_ns),
     )
@@ -231,6 +278,17 @@ def force_sample_to_messages(
         or capability.semantic is not TelemetrySemantic.FORCE
     ):
         raise ValidationError("capability must describe force telemetry")
+
+    # The aggregate meta tracks the last completed physical query. A later
+    # L20Lite scalar read must not restamp the older B1..B5 matrix projection.
+    if sample.fields:
+        native = next(
+            (field for field in sample.fields if field.query_channel == "force"), None
+        )
+        if native is None:
+            return ForceMessages(telemetry=None, tactile=None)
+        if sample.meta != native.meta:
+            sample = replace(sample, meta=native.meta)
 
     telemetry = None
     if sample.raw:
@@ -421,6 +479,7 @@ __all__ = [
     "ForceMessages",
     "RawVectorSample",
     "angle_sample_to_message",
+    "force_field_to_message",
     "force_sample_to_messages",
     "make_angle_message",
     "telemetry_sample_to_message",

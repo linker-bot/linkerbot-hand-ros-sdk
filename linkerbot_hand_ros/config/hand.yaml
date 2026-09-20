@@ -19,6 +19,13 @@ linkerbot_hand:
     angle_feedback: adaptive
     speeds_hz: 0.0
     force_hz: 0.0
+    force_fn_hz: 0.0
+    force_fns_hz: 0.0
+    force_ft_hz: 0.0
+    force_fts_hz: 0.0
+    force_fd_hz: 0.0
+    force_fds_hz: 0.0
+    force_px_hz: 0.0
     temperature_hz: 0.0
     current_hz: 0.0
     faults_hz: 0.0

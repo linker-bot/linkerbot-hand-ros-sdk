@@ -19,3 +19,4 @@ float64 estimated_transaction_s
 bool device_measured
 bool device_queried
 bool decoded_statuses
+string[] force_fields

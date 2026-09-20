@@ -44,7 +44,7 @@ response contains current device state usable as feedback. It is independent of
 `ack_support`, is not a target echo, and does not indicate mechanical arrival.
 The `angles` command's flag gates the SDK's `command_feedback_only` policy.
 
-The unreleased capability schema is `1.3`. It includes command feedback support,
+The unreleased capability schema is `1.4`. It includes named tactile field capabilities, command feedback support,
 `TelemetryCapability.payload_projection` and extended identity metadata. These
 fields change the ROSIDL types of capabilities and device info. Rebuild the
 message package, driver, GUI and external capability consumers together; a schema
@@ -70,7 +70,22 @@ For the force capability, `payload_projection` selects the publication contract:
 | `raw_vector` | `state/force` | `HandTelemetry` |
 
 Six current models use matrices; O30 uses descriptors. No current model declares
-scalar force. All projections retain the originating force sample's metadata.
+the legacy scalar force projection. L20Lite also exposes independent fns/fts/fds/px
+scalar fields. All projections retain their own physical query's metadata.
+
+`HandForceField` carries one named fn/fns/ft/fts/fd/fds/px field with per-sensor
+raw arrays, presence, validity, unit and encoding. Its metadata and query_channel
+identify the actual acquisition; missing sensors are empty, not zero-filled.
+`ForceFieldCapability` distinguishes unknown descriptor support from absent
+features and reports shared queries and runtime firmware degradation.
+All seven fields are covered by the [force interface guide](../linkerbot_hand_ros/docs/zh/force.md).
+
+`HandJointFaultStatus.supported_flags` lists the flags defined by the protocol;
+false flags outside that list do not assert normal device state. L20Lite exposes
+load overload, overcurrent, overtemperature, magnetic encoder abnormality and
+over/undervoltage with explanations. It has no clear-fault command.
+`StallProtectionCapability.has_hold_current/has_hold_torque` distinguish output
+quantity support; L20Lite C7 is torque, not current.
 
 中文约定：普通 `raw` 字段始终表示设备协议原值，不做物理单位换算；`percent` 仅表示
 SDK capability 定义的 `0..100` 映射。屈伸轴为 `0=弯曲，100=伸直`，侧摆和旋转轴的

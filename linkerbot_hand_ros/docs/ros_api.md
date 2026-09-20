@@ -46,7 +46,7 @@ echo, protocol ACK or mechanical arrival. The SDK rejects `command_feedback_only
 with a nonzero angle rate if this flag is false. Use the connected SDK's declaration;
 the O30 command-feedback fix in Hand issue #148 also changes this value.
 
-Capability schema `1.3` includes this field, `payload_projection`, and extended
+Capability schema `1.4` includes this field, `force_fields`, `payload_projection`, and extended
 identity metadata, changing the ROSIDL types. Rebuild messages, driver, GUI and all
 external capability consumers together. Old and new message builds must not be
 mixed; checking the revision string does not provide wire compatibility.
@@ -121,10 +121,25 @@ transition when measuring actual sends.
 Read the force capability's `payload_projection`: `tactile_matrix` selects
 `state/tactile`, `tactile_descriptor` selects `state/tactile_sensors` and the
 optional resultant projection, and `raw_vector` selects `state/force`. Six current
-models use matrices; O30 uses descriptors; none currently uses scalar force.
+models use matrices; O30 uses descriptors; none uses the legacy scalar projection.
 `HandCommandClient.telemetry_capability("force")` returns copied metadata or None
 when absent/disabled; it does not query the device or prove driver readiness.
 
+Named raw tactile quantities publish as `HandForceField` on
+`~/state/force_fn`, `force_fns`, `force_ft`, `force_fts`, `force_fd`, `force_fds`
+and `force_px`. Each sensor retains presence, raw arrays, validity, units and
+encoding; each field retains its own acquisition metadata and query channel.
+L20Lite adds scalar fns/fts/fds/px besides matrices. O30 support remains unknown
+until descriptor discovery; `capabilities.force_fields` and
+`HandCommandClient.force_field_capability(name)` expose that distinction.
+
+Set `force_<field>_hz` for individual rates. `force_hz` remains shorthand for
+available fn + fns, and cannot combine with positive fn/fns-specific rates.
+O30 fn and fns share one physical query at the maximum requested rate; both
+are returned. Independent models query separately. ROS adds no CAN queries and
+never sums matrix values to manufacture resultants. See the
+[complete force guide](zh/force.md). Install the SDK source with unified force
+support until the next package release, and rebuild all ROS message consumers.
 Sensor `maximum_rows/maximum_columns` replace the old `rows/columns` fields.
 They and `requested_rows/requested_columns` preserve device metadata without
 reshaping fields. Actual byte ranges and element counts come from the descriptor.

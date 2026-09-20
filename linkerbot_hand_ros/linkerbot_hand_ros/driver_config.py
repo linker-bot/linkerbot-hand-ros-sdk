@@ -13,10 +13,10 @@ from linkerbot_hand import (
     HandSide,
     PollingPlan,
     TelemetrySemantic,
-    UnsupportedOperationError,
     ValidationError,
     get_declared_capabilities,
 )
+from linkerbot_hand.capabilities.polling import resolve_poll_rates
 
 from .transport_config import TransportConfiguration, parse_transport_configuration
 
@@ -24,6 +24,13 @@ POLL_RATE_PARAMETERS: Mapping[str, TelemetrySemantic] = {
     "angles_hz": TelemetrySemantic.ANGLES,
     "speeds_hz": TelemetrySemantic.MEASURED_SPEEDS,
     "force_hz": TelemetrySemantic.FORCE,
+    "force_fn_hz": TelemetrySemantic.FORCE,
+    "force_fns_hz": TelemetrySemantic.FORCE_FNS,
+    "force_ft_hz": TelemetrySemantic.FORCE_FT,
+    "force_fts_hz": TelemetrySemantic.FORCE_FTS,
+    "force_fd_hz": TelemetrySemantic.FORCE_FD,
+    "force_fds_hz": TelemetrySemantic.FORCE_FDS,
+    "force_px_hz": TelemetrySemantic.FORCE_PX,
     "temperature_hz": TelemetrySemantic.TEMPERATURES,
     "current_hz": TelemetrySemantic.CURRENTS,
     "faults_hz": TelemetrySemantic.FAULTS,
@@ -189,26 +196,9 @@ def validate_polling_plan(
         raise ValidationError("capabilities must be DeviceCapabilities")
     if not isinstance(plan, PollingPlan):
         raise ValidationError("plan must be PollingPlan")
-    for parameter_name, semantic in POLL_RATE_PARAMETERS.items():
-        if getattr(plan, parameter_name) == 0:
-            continue
-        # ``telemetry_supported()`` also excludes a channel the firmware turned
-        # out not to answer, which ``telemetry_channel(...) is not None`` does
-        # not. This validator runs against verified capabilities while the node
-        # is active (``node.py``), so without it a rate set for a runtime
-        # disabled channel is accepted and then silently never produces data.
-        telemetry = capabilities.telemetry_channel(semantic)
-        pollable = (
-            capabilities.telemetry_supported(semantic)
-            and telemetry is not None
-            and telemetry.device_queried
-        )
-        if not pollable:
-            raise UnsupportedOperationError(
-                f"{capabilities.model} cannot poll {semantic.value}",
-                operation="start_polling",
-                model=capabilities.model,
-            )
+    # Keep default-field fallback, descriptor discovery and shared-query
+    # validation identical to HandDevice.start_polling().
+    resolve_poll_rates(plan, capabilities)
 
 
 def _finite_rate(name: str, value: object, *, allow_zero: bool) -> float:
