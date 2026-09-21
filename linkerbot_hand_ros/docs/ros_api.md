@@ -23,6 +23,16 @@ Static parameters are accepted only while unconfigured:
 `auto_reconnect`, `reconnect_initial_delay_s`, and
 `reconnect_max_delay_s`.
 
+`identity_timeout_s` defaults to `0.2` seconds per identity response stage,
+including L30/O30 follow-up stages. `transaction_timeout_s` defaults to `0.0`,
+which maps to SDK `None` and preserves each protocol's response window. Positive
+values override each ordinary response stage for baseline reads, getters,
+polling and commands requiring a reply. Use a Hand SDK with optional transaction
+timeout support. These windows start after the stage's request batch is sent;
+complete replies finish the wait immediately. Protocol pacing, dispatch-only
+commands and retry behavior are unchanged. Service `timeout_s` remains a
+separate caller wait budget, not a response-window override or recovery cancel.
+
 Runtime parameters are `publish_rate_hz`, `diagnostic_rate_hz`, `angles_hz`,
 `speeds_hz`, `force_hz`, `temperature_hz`, `current_hz`, `faults_hz`,
 `torques_hz`, `voltage_hz`, and `angle_feedback`. The feedback policy accepts

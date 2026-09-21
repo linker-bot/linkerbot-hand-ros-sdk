@@ -148,13 +148,22 @@ def read_driver_configuration(read_parameter: ParameterReader) -> DriverConfigur
     capabilities = get_declared_capabilities(model, side=side)
 
     transport = parse_transport_configuration(read_parameter("transport_json"))
+    transaction_timeout_s = _finite_rate(
+        "transaction_timeout_s",
+        read_parameter("transaction_timeout_s"),
+        allow_zero=True,
+    )
     device_config = DeviceConfig(
         command_rate_hz=read_parameter("command_rate_hz"),
         discrete_queue_capacity=read_parameter("discrete_queue_capacity"),
         mailbox_capacity=read_parameter("mailbox_capacity"),
         route_queue_capacity=read_parameter("route_queue_capacity"),
         identity_timeout_s=read_parameter("identity_timeout_s"),
-        transaction_timeout_s=read_parameter("transaction_timeout_s"),
+        # ROS numeric parameters cannot represent SDK None; zero selects the
+        # protocol's own response window, positive values explicitly override it.
+        transaction_timeout_s=(
+            None if transaction_timeout_s == 0 else transaction_timeout_s
+        ),
         shutdown_timeout_s=read_parameter("shutdown_timeout_s"),
         auto_reconnect=read_parameter("auto_reconnect"),
         reconnect_initial_delay_s=read_parameter("reconnect_initial_delay_s"),

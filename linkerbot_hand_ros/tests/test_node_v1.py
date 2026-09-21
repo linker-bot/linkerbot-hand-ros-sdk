@@ -111,6 +111,28 @@ def test_configure_constructs_no_runtime_io_or_worker_thread(node_rig):
     assert {thread.ident for thread in threading.enumerate()} == threads_before
 
 
+@pytest.mark.parametrize("timeout_s", (None, 0.0, 0.4))
+def test_response_timeout_parameter_reaches_sdk_at_configure(node_rig, timeout_s):
+    node, builder = node_rig
+    if timeout_s is not None:
+        result = node.set_parameters_atomically(
+            [Parameter("transaction_timeout_s", value=timeout_s)]
+        )
+        assert result.successful
+
+    assert node.trigger_configure() == TransitionCallbackReturn.SUCCESS
+
+    assert node.get_parameter("transaction_timeout_s").value == (timeout_s or 0.0)
+    assert builder.calls[0].device_config.transaction_timeout_s == (timeout_s or None)
+    rejected = node.set_parameters_atomically(
+        [Parameter("transaction_timeout_s", value=0.3)]
+    )
+    assert not rejected.successful
+    assert node._configuration.device_config.transaction_timeout_s == (
+        timeout_s or None
+    )
+
+
 def test_configure_only_creates_capability_supported_ros_entities(node_rig):
     node, _builder = node_rig
 

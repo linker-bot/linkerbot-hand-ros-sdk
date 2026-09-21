@@ -31,12 +31,19 @@ ros2 lifecycle set /linkerbot_hand activate
 | `discrete_queue_capacity` | `16` | 离散和安全配置命令的有界 FIFO 容量 |
 | `mailbox_capacity` | `256` | 设备 runtime mailbox 容量 |
 | `route_queue_capacity` | `256` | transport 路由队列容量 |
-| `identity_timeout_s` | `0.2` | 身份/版本事务超时 |
-| `transaction_timeout_s` | `0.1` | 普通协议事务默认超时 |
+| `identity_timeout_s` | `0.2` | 每个身份响应阶段的等待秒数，包含 L30/O30 后续阶段 |
+| `transaction_timeout_s` | `0.0` | `0.0` 沿用各协议默认响应窗口；正数覆盖每个普通响应阶段的等待秒数 |
 | `shutdown_timeout_s` | `2.0` | worker 和连接关闭总边界 |
 | `auto_reconnect` | `false` | SDK 自动安全恢复 |
 | `reconnect_initial_delay_s` | `0.1` | 首次重连退避 |
 | `reconnect_max_delay_s` | `2.0` | 最大重连退避 |
+
+响应超时从该阶段整批请求发送完成开始计时，完整回复提前到达即结束等待。
+`transaction_timeout_s=0.0` 在 ROS 适配层转换为 SDK 的 `None`，需要搭配支持可选
+事务超时的 Hand SDK；SDK 直接调用应使用 `None`，不接受 `0`。该参数覆盖 baseline、
+主动查询、轮询和需要回复的命令，保留协议发送间隔及无需回复命令的行为，不增加重试。
+身份阶段使用独立的 `identity_timeout_s`。管理服务的 `timeout_s` 仍是调用者等待预算，
+不代表单阶段响应时间，也不因为等待超时而取消 SDK 后台恢复。
 
 型号解析使用 Hand SDK 的统一规则：配置填写 `o30`、`l20`，历史名称 `o30i`、`l25`
 不是配置别名，不能用完整产品编号替代 `model`。采用该规则的 SDK 会在 configure

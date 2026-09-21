@@ -30,7 +30,7 @@ def _parameters(**overrides):
         "mailbox_capacity": 256,
         "route_queue_capacity": 256,
         "identity_timeout_s": 0.2,
-        "transaction_timeout_s": 0.1,
+        "transaction_timeout_s": 0.0,
         "shutdown_timeout_s": 2.0,
         "auto_reconnect": False,
         "reconnect_initial_delay_s": 0.1,
@@ -68,6 +68,27 @@ def test_configuration_uses_declared_sdk_capabilities_as_source_of_truth():
     assert configuration.polling_plan.angles_hz == 100.0
     assert configuration.polling_plan.force_hz == 30.0
     assert configuration.polling_plan.angle_feedback is AngleFeedbackPolicy.ADAPTIVE
+    assert configuration.device_config.transaction_timeout_s is None
+
+
+@pytest.mark.parametrize(
+    "value, expected", [(0.0, None), (0, None), (0.1, 0.1), (1, 1.0)]
+)
+def test_transaction_timeout_preserves_protocol_defaults_or_explicit_override(
+    value, expected
+):
+    configuration = read_driver_configuration(
+        _parameters(transaction_timeout_s=value).__getitem__
+    )
+
+    assert configuration.device_config.transaction_timeout_s == expected
+    assert configuration.device_config.identity_timeout_s == 0.2
+
+
+@pytest.mark.parametrize("value", [True, False, -1.0, math.nan, math.inf, "0.1", None])
+def test_transaction_timeout_rejects_invalid_values(value):
+    with pytest.raises(ValidationError, match="transaction_timeout_s"):
+        read_driver_configuration(_parameters(transaction_timeout_s=value).__getitem__)
 
 
 @pytest.mark.parametrize(

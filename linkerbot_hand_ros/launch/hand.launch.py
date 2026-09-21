@@ -13,7 +13,7 @@ _ARGUMENTS = (
     ("mailbox_capacity", "256", int),
     ("route_queue_capacity", "256", int),
     ("identity_timeout_s", "0.2", float),
-    ("transaction_timeout_s", "0.1", float),
+    ("transaction_timeout_s", "0.0", float),
     ("shutdown_timeout_s", "2.0", float),
     ("auto_reconnect", "false", bool),
     ("reconnect_initial_delay_s", "0.1", float),

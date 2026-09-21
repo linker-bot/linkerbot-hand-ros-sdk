@@ -26,7 +26,7 @@ PARAMETER_DEFAULTS = {
     "mailbox_capacity": 256,
     "route_queue_capacity": 256,
     "identity_timeout_s": 0.2,
-    "transaction_timeout_s": 0.1,
+    "transaction_timeout_s": 0.0,
     "shutdown_timeout_s": 2.0,
     "auto_reconnect": False,
     "reconnect_initial_delay_s": 0.1,

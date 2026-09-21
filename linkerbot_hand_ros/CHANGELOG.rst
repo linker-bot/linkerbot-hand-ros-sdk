@@ -11,6 +11,12 @@ section.
 Unreleased
 ----------
 
+* Default ``transaction_timeout_s`` to ``0.0`` and map it to SDK ``None`` to
+  preserve each protocol's response window. Positive values override ordinary
+  response stages; invalid values remain rejected. Clarify that identity timeouts
+  apply per stage, including L30/O30 follow-up requests. Install the Hand SDK
+  source supporting optional transaction timeouts before using this default.
+
 * Synchronize L20Lite C7 with ``set_stall_hold_currents`` and hold-current state.
   Retain FIFO admission, confirmed write-echo metadata and no active read service.
   Remove obsolete torque capability fields and advance the schema to 1.5;
