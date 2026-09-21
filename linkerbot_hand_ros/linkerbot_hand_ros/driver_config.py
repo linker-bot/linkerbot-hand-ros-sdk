@@ -49,6 +49,9 @@ DEVICE_CONFIG_PARAMETERS = frozenset(
         "auto_reconnect",
         "reconnect_initial_delay_s",
         "reconnect_max_delay_s",
+        "recovery_max_attempts",
+        "recovery_timeout_s",
+        "recovery_retry_delay_s",
     }
 )
 RUNTIME_RATE_PARAMETERS = frozenset(
@@ -168,6 +171,9 @@ def read_driver_configuration(read_parameter: ParameterReader) -> DriverConfigur
         auto_reconnect=read_parameter("auto_reconnect"),
         reconnect_initial_delay_s=read_parameter("reconnect_initial_delay_s"),
         reconnect_max_delay_s=read_parameter("reconnect_max_delay_s"),
+        recovery_max_attempts=read_parameter("recovery_max_attempts"),
+        recovery_timeout_s=read_parameter("recovery_timeout_s"),
+        recovery_retry_delay_s=read_parameter("recovery_retry_delay_s"),
     )
     plan = PollingPlan(
         **{

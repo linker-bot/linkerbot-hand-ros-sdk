@@ -35,6 +35,9 @@ def _parameters(**overrides):
         "auto_reconnect": False,
         "reconnect_initial_delay_s": 0.1,
         "reconnect_max_delay_s": 2.0,
+        "recovery_max_attempts": 3,
+        "recovery_timeout_s": 5.0,
+        "recovery_retry_delay_s": 0.2,
         "publish_rate_hz": 100.0,
         "diagnostic_rate_hz": 1.0,
         "angles_hz": 100.0,
@@ -69,6 +72,31 @@ def test_configuration_uses_declared_sdk_capabilities_as_source_of_truth():
     assert configuration.polling_plan.force_hz == 30.0
     assert configuration.polling_plan.angle_feedback is AngleFeedbackPolicy.ADAPTIVE
     assert configuration.device_config.transaction_timeout_s is None
+    assert configuration.device_config.recovery_max_attempts == 3
+    assert configuration.device_config.recovery_timeout_s == 5.0
+    assert configuration.device_config.recovery_retry_delay_s == 0.2
+
+
+@pytest.mark.parametrize(
+    "name, value",
+    [
+        ("recovery_max_attempts", 1),
+        ("recovery_timeout_s", 2.5),
+        ("recovery_retry_delay_s", 0.1),
+    ],
+)
+def test_recovery_policy_values_reach_sdk(name, value):
+    configuration = read_driver_configuration(_parameters(**{name: value}).__getitem__)
+    assert getattr(configuration.device_config, name) == value
+
+
+@pytest.mark.parametrize(
+    "name", ("recovery_max_attempts", "recovery_timeout_s", "recovery_retry_delay_s")
+)
+@pytest.mark.parametrize("value", (0, -1, True, math.nan, math.inf, None))
+def test_recovery_policy_rejects_invalid_values(name, value):
+    with pytest.raises(ValidationError, match=name):
+        read_driver_configuration(_parameters(**{name: value}).__getitem__)
 
 
 @pytest.mark.parametrize(

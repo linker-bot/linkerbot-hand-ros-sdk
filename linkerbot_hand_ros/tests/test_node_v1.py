@@ -148,6 +148,26 @@ def test_configure_only_creates_capability_supported_ros_entities(node_rig):
     assert "/linkerbot_hand/calibrate" not in service_names
 
 
+@pytest.mark.parametrize(
+    "name, value",
+    [
+        ("recovery_max_attempts", 2),
+        ("recovery_timeout_s", 3.0),
+        ("recovery_retry_delay_s", 0.1),
+    ],
+)
+def test_recovery_policy_is_configure_only_and_reaches_device(node_rig, name, value):
+    node, builder = node_rig
+    assert node.set_parameters_atomically([Parameter(name, value=value)]).successful
+    assert node.trigger_configure() == TransitionCallbackReturn.SUCCESS
+    assert getattr(builder.calls[0].device_config, name) == value
+    replacement = 4 if isinstance(value, int) else 4.0
+    assert not node.set_parameters_atomically(
+        [Parameter(name, value=replacement)]
+    ).successful
+    assert node.get_parameter(name).value == value
+
+
 def test_executor_owned_entities_use_isolated_callback_groups(node_rig):
     node, _builder = node_rig
 

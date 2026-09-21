@@ -37,6 +37,9 @@ ros2 lifecycle set /linkerbot_hand activate
 | `auto_reconnect` | `false` | SDK 自动安全恢复 |
 | `reconnect_initial_delay_s` | `0.1` | 首次重连退避 |
 | `reconnect_max_delay_s` | `2.0` | 最大重连退避 |
+| `recovery_max_attempts` | `3` | 每轮恢复最多进行的身份与 baseline 初始化尝试次数，包含首次；正整数 |
+| `recovery_timeout_s` | `5.0` | 每轮恢复执行总预算，包含准备、读取与重试等待；正数 |
+| `recovery_retry_delay_s` | `0.2` | 响应超时后重试前的最小接收静默间隔；正数 |
 
 响应超时从该阶段整批请求发送完成开始计时，完整回复提前到达即结束等待。
 `transaction_timeout_s=0.0` 在 ROS 适配层转换为 SDK 的 `None`，需要搭配支持可选
@@ -44,6 +47,13 @@ ros2 lifecycle set /linkerbot_hand activate
 主动查询、轮询和需要回复的命令，保留协议发送间隔及无需回复命令的行为，不增加重试。
 身份阶段使用独立的 `identity_timeout_s`。管理服务的 `timeout_s` 仍是调用者等待预算，
 不代表单阶段响应时间，也不因为等待超时而取消 SDK 后台恢复。
+
+恢复策略参数只能在未配置状态下修改，需要支持这些配置的 Hand SDK。仅身份和 baseline
+的响应超时允许重试；身份不匹配、协议错误和写入不重试。实际静默窗口取配置、失败阶段
+响应窗口和协议隔离窗口的最大值，收到本设备的帧会重新计时，整轮仍受总预算限制。
+无请求序号协议无法识别超出静默窗口的任意迟到旧帧，可按现场最大延迟增大间隔。
+服务等待超时不取消共享恢复；达到恢复执行截止后不提交成功。底层阻塞 I/O 不能强制
+抢占，SDK 在返回后复核截止。开启自动重连时，失败后仍可按退避策略另起有界的一轮。
 
 型号解析使用 Hand SDK 的统一规则：配置填写 `o30`、`l20`，历史名称 `o30i`、`l25`
 不是配置别名，不能用完整产品编号替代 `model`。采用该规则的 SDK 会在 configure

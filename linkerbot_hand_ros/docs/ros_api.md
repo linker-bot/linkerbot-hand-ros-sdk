@@ -21,7 +21,8 @@ Static parameters are accepted only while unconfigured:
 `discrete_queue_capacity`, `mailbox_capacity`, `route_queue_capacity`,
 `identity_timeout_s`, `transaction_timeout_s`, `shutdown_timeout_s`,
 `auto_reconnect`, `reconnect_initial_delay_s`, and
-`reconnect_max_delay_s`.
+`reconnect_max_delay_s`, `recovery_max_attempts`, `recovery_timeout_s`, and
+`recovery_retry_delay_s`.
 
 `identity_timeout_s` defaults to `0.2` seconds per identity response stage,
 including L30/O30 follow-up stages. `transaction_timeout_s` defaults to `0.0`,
@@ -32,6 +33,18 @@ timeout support. These windows start after the stage's request batch is sent;
 complete replies finish the wait immediately. Protocol pacing, dispatch-only
 commands and retry behavior are unchanged. Service `timeout_s` remains a
 separate caller wait budget, not a response-window override or recovery cancel.
+
+Recovery uses at most `recovery_max_attempts=3` initialization attempts per cycle
+and a separate `recovery_timeout_s=5.0` execution budget. Only identity/baseline
+response timeouts are retried; writes, malformed replies and identity mismatches
+are not. Before retrying, SDK discards this endpoint's replies until it has been
+quiet for the maximum of `recovery_retry_delay_s=0.2`, the failed response window
+and the protocol guard. Each arrival restarts that quiet interval, within the
+same execution budget. Protocols without request sequence numbers cannot identify
+arbitrarily late replies beyond this window. Blocking transport I/O is checked
+on return; expired recovery cannot commit readiness. Caller wait expiry does not
+cancel shared recovery. Enabled automatic reconnect may start another bounded
+cycle after backoff. These parameters require a Hand SDK with bounded recovery.
 
 Runtime parameters are `publish_rate_hz`, `diagnostic_rate_hz`, `angles_hz`,
 `speeds_hz`, `force_hz`, `temperature_hz`, `current_hz`, `faults_hz`,

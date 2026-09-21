@@ -11,6 +11,12 @@ section.
 Unreleased
 ----------
 
+* Expose configure-only ``recovery_max_attempts`` (3), ``recovery_timeout_s``
+  (5.0 seconds), and ``recovery_retry_delay_s`` (0.2 seconds) consistently in
+  node defaults, launch and YAML. Document response-only retries, independent
+  caller/execution budgets, late-reply limits and automatic reconnect cycles.
+  Requires the Hand SDK source supporting bounded recovery.
+
 * Default ``transaction_timeout_s`` to ``0.0`` and map it to SDK ``None`` to
   preserve each protocol's response window. Positive values override ordinary
   response stages; invalid values remain rejected. Clarify that identity timeouts
