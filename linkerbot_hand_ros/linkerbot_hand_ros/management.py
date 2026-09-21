@@ -63,7 +63,7 @@ _RAW_GETTERS = {
     TelemetrySemantic.CONFIGURED_SPEEDS: "get_configured_speeds",
     TelemetrySemantic.CONFIGURED_ACCELERATIONS: "get_configured_accelerations",
     TelemetrySemantic.CURRENT_LIMITS: "get_current_limits",
-    TelemetrySemantic.EFFORT_LIMITS: "get_effort_limits",
+    TelemetrySemantic.TORQUES_LIMITS: "get_torques_limits",
     TelemetrySemantic.MOTION_TIMES: "get_motion_times",
     TelemetrySemantic.LIMIT_COMPENSATIONS: "get_limit_compensations",
 }

@@ -37,7 +37,7 @@ _RAW_COMMANDS = (
     "speeds",
     "accelerations",
     "current_limits",
-    "effort_limits",
+    "torques_limits",
     "torques",
     "motion_times",
     "limit_compensations",
@@ -319,8 +319,8 @@ class HandCommandClient:
     def set_current_limits(self, values: Sequence[float]) -> CommandPublication:
         return self._set_raw("current_limits", values)
 
-    def set_effort_limits(self, values: Sequence[float]) -> CommandPublication:
-        return self._set_raw("effort_limits", values)
+    def set_torques_limits(self, values: Sequence[float]) -> CommandPublication:
+        return self._set_raw("torques_limits", values)
 
     def set_torques(self, values: Sequence[float]) -> CommandPublication:
         return self._set_raw("torques", values)

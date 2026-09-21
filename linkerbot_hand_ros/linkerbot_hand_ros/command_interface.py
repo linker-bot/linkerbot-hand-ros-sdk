@@ -45,7 +45,7 @@ _RAW_COMMANDS = (
     CommandSemantic.SPEEDS,
     CommandSemantic.ACCELERATIONS,
     CommandSemantic.CURRENT_LIMITS,
-    CommandSemantic.EFFORT_LIMITS,
+    CommandSemantic.TORQUES_LIMITS,
     CommandSemantic.TORQUES,
     CommandSemantic.MOTION_TIMES,
     CommandSemantic.LIMIT_COMPENSATIONS,

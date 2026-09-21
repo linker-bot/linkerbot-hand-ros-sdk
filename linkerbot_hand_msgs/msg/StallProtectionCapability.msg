@@ -4,8 +4,6 @@ StallFieldCapability detection_time
 StallFieldCapability threshold
 StallFieldCapability hold_current
 bool has_hold_current
-StallFieldCapability hold_torque
-bool has_hold_torque
 string physical_semantics_confidence
 bool safety_range_verified
 bool read_supported

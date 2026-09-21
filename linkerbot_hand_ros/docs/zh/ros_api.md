@@ -16,7 +16,7 @@ runtime 和总线仲裁；独立进程不共享。
 `command_feedback_only`。程序应读取所连接 SDK 的能力字段，不硬编码型号表；
 Hand #148 的 O30 角度反馈修复也会更新该值。
 
-能力 schema `1.4` 包含此字段、`force_fields`、`payload_projection` 和扩展身份信息，改变相关
+能力 schema `1.5` 包含此字段、`force_fields`、`payload_projection` 和扩展身份信息，改变相关
 ROSIDL 类型。需同时重建消息包、驱动、GUI 和所有外部能力消息
 消费者；新旧构建不能混用，revision 字符串不能解决底层类型不兼容。
 
@@ -82,14 +82,14 @@ ros2 topic pub --once /linkerbot_hand/command/angles \
 | `~/command/speeds` | configured speed，不等于实测速度 |
 | `~/command/accelerations` | configured acceleration |
 | `~/command/current_limits` | 电流上限，不等于真实扭矩 |
-| `~/command/effort_limits` | 未确认物理单位的 effort 上限 |
+| `~/command/torques_limits` | O30 `0x06` 转矩限制原值，与 `0x04` 电流限制分开 |
 | `~/command/torques` | 只有 capability 确认为真实扭矩时存在 |
 | `~/command/motion_times` | 协议 motion-time 配置 |
 | `~/command/limit_compensations` | 逐关节限位补偿原值，当前仅 L6 声明 |
 
 驱动 active 后只创建 capability 支持的订阅。命令 Topic 使用
 best-effort + keep-last(1)，不保证每条发布都进入 SDK。SDK 中角度、速度、电流上限、
-effort 上限和扭矩使用独立 latest slot；加速度、运动时间、限位补偿属于有界 FIFO 配置。
+转矩上限和扭矩使用独立 latest slot；加速度、运动时间、限位补偿属于有界 FIFO 配置。
 需要明确接纳结果的低频限位补偿配置优先使用下方可靠服务。
 
 ## 命令阶段
@@ -148,7 +148,7 @@ device_measured, device_queried, meta
 - `~/state/configured_accelerations`
 - `~/state/currents`
 - `~/state/current_limits`
-- `~/state/effort_limits`
+- `~/state/torques_limits`
 - `~/state/torques`
 - `~/state/temperatures`
 - `~/state/faults`
@@ -188,14 +188,20 @@ force capability 的 `payload_projection` 决定公共发布契约：
 
 故障解释中的 `supported_flags` 列出当前协议有定义的标志；其他 false 字段不代表
 设备确认正常。L20Lite 保留原字节、未知位以及负载过载、过流、过热、磁编码异常、
-过压/欠压解释，不支持清错。堵转能力的 `has_hold_current/has_hold_torque` 分别
-说明电流/扭矩字段是否存在，不能把 L20Lite C7 标成电流。
+过压/欠压解释，不支持清错。堵转维持输出统一使用 `hold_current` 和
+`has_hold_current`，包括 L20Lite C7；旧 `hold_torque/has_hold_torque` 已删除。
+schema 1.5 需要一起重建消息包、驱动、GUI 和外部消费者。
 
 ## 堵转状态
 
 `~/state/stall_protection` 使用 `HandStallProtectionState`，分别保存 detection times、
 thresholds 和 hold currents 三个 raw 样本及独立元数据。协议范围不等于已验证安全范围；
 `safety_range_verified=false` 时不要做极限写入。
+
+L20Lite C5/C6/C7 分别对应阈值、判定时间和维持电流：三个 setter 服务均可用，
+使用同一 FIFO 配置队列。每项只有两组写回显都通过校验才成为有效状态；
+该型号没有主动读取配置的协议契约，不创建 `~/get_stall_protection` 服务。
+`~/state/stall_protection` 保留各字段的有效性和原始回显时间，不发送补充查询。
 
 ## 管理服务
 
@@ -205,8 +211,8 @@ thresholds 和 hold currents 三个 raw 样本及独立元数据。协议范围�
 | `~/get_stall_protection` | `GetStallProtection` | 在一个总 timeout 内读取三项堵转配置 |
 | `~/get_configured_speeds` | `GetRawValues` | 配置速度；按能力查询设备或读取写入回包/本地命令缓存 |
 | `~/get_configured_accelerations` | `GetRawValues` | 配置加速度 |
-| `~/get_current_limits` | `GetRawValues` | 电流上限；按能力查询设备或读取本地命令缓存 |
-| `~/get_effort_limits` | `GetRawValues` | effort 通道；L20/L20Lite 返回当前实测负载 |
+| `~/get_current_limits` | `GetRawValues` | 电流上限；按能力查询设备或读取本地命令缓存，L20/L20Lite 不提供 |
+| `~/get_torques_limits` | `GetRawValues` | O30 `0x06` 转矩限制配置，不是实时转矩 |
 | `~/get_motion_times` | `GetRawValues` | 运动时间配置 |
 | `~/set_stall_detection_times` | `SetRawValues` | 非阻塞提交 raw 配置 |
 | `~/set_stall_thresholds` | `SetRawValues` | 非阻塞提交 raw 配置 |
@@ -227,7 +233,8 @@ ros2 service call /linkerbot_hand/clear_faults \
 
 O6 的三项堵转配置顺序由 SDK capability 决定：threshold=`C5`、detection time=`C6`、hold
 current=`C7`。ROS 只收发 raw；当前资料给出的解释分别为 `1000/255 mA/count`、
-`10 ms/count`，以及名称为堵转扭矩但公式单位为 mA 的冲突项。写入成功后如需掉电保留，先等
+`10 ms/count`，以及统一为维持电流、但旧资料称堵转扭矩且比例未经验证的项目。
+写入成功后如需掉电保留，先等
 对应 command status 到达 `ACKNOWLEDGED`，再调用 `save_parameters` 并等待它的 ACK；该操作
 不会自动重启设备。
 
@@ -250,9 +257,22 @@ current=`C7`。ROS 只收发 raw；当前资料给出的解释分别为 `1000/25
 | `command_response` | 返回最近一次有效的设备写入回包，不发新查询 | L6 配置速度 |
 | `command_cache` | 返回最近一次有效的本地已发送命令缓存，不表示设备已确认，不发新查询 | L30 配置速度/电流上限 |
 
-L20/L20Lite 的 `get_effort_limits` 查询的是**当前实测负载**，不是读取保存的限制配置；
-保留 `device_measured=true` 和 SDK 给出的原始单位、比例说明。所有型号均透传 SDK
-元数据，不根据方法名推断为真实扭矩。
+L20/L20Lite 的实时电流由 `current_hz` 轮询并发布到 `~/state/currents`，
+保留 `device_measured=true`；没有电流限制回读服务。O30 的实时电流与转矩分别使用
+`current_hz` / `torques_hz`，发布到 `~/state/currents` / `~/state/torques`；限制值分别使用
+`~/get_current_limits` / `~/get_torques_limits` 服务，发布到对应限制状态话题。
+所有型号均透传 SDK 的原始单位、比例说明，不增加物理换算。
+
+原 `effort_limits` 名称已删除，迁移如下：
+
+| 型号 | 原命令 `effort_limits` / 客户端 `set_effort_limits()` | 原状态 / 读取服务 |
+| --- | --- | --- |
+| L20 / L20Lite | `current_limits` / `set_current_limits()` | 状态改为 `currents`；使用 `current_hz`，无限制回读 |
+| O20 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits` |
+| O30 | `torques_limits` / `set_torques_limits()` | `torques_limits` / `get_torques_limits` |
+
+O30 `0x04` 现有电流接口保留，与 `0x06` 转矩对象独立；当前各型号均未声明
+`set_torques()` 命令，转矩限制设置不代表开放实时转矩目标控制。
 
 成功响应的 `state` 保留 raw、通道名称、单位、比例说明、可信度及 `meta`。读取回包或
 缓存不会刷新原采集时刻和 sequence；age/stale 按读取时刻计算，因此 `success=true`

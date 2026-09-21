@@ -22,7 +22,7 @@ from linkerbot_hand import (
 
 from linkerbot_hand_msgs import msg as ros_messages
 
-CAPABILITY_SCHEMA_REVISION = "1.4"
+CAPABILITY_SCHEMA_REVISION = "1.5"
 
 
 def capabilities_to_message(
@@ -244,15 +244,13 @@ def _telemetry_to_message(
 
 
 def _stall_field_to_message(
-    value: StallFieldCapability | None,
+    value: StallFieldCapability,
     *,
     semantic: TelemetrySemantic,
     channels: tuple[str, ...],
     read_supported: bool,
     write_supported: bool,
 ) -> ros_messages.StallFieldCapability:
-    if value is None:
-        return ros_messages.StallFieldCapability(semantic=semantic.value)
     return ros_messages.StallFieldCapability(
         semantic=semantic.value,
         channel_names=list(channels),
@@ -300,21 +298,7 @@ def _stall_to_message(
             read_supported=value.read_supported,
             write_supported=value.write_supported,
         ),
-        has_hold_current=value.hold_current is not None,
-        # Keep the tactile driver usable with both the current SDK main and
-        # SDKs that add a model-specific post-stall torque output.
-        has_hold_torque=getattr(value, "hold_torque", None) is not None,
-        hold_torque=(
-            _stall_field_to_message(
-                value.hold_torque,
-                semantic=TelemetrySemantic("stall_hold_torques"),
-                channels=value.channels,
-                read_supported=value.read_supported,
-                write_supported=value.write_supported,
-            )
-            if getattr(value, "hold_torque", None) is not None
-            else ros_messages.StallFieldCapability(semantic="stall_hold_torques")
-        ),
+        has_hold_current=True,
         physical_semantics_confidence=(value.physical_semantics_confidence.value),
         safety_range_verified=value.safety_range_verified,
         read_supported=value.read_supported,

@@ -44,7 +44,7 @@ response contains current device state usable as feedback. It is independent of
 `ack_support`, is not a target echo, and does not indicate mechanical arrival.
 The `angles` command's flag gates the SDK's `command_feedback_only` policy.
 
-The unreleased capability schema is `1.4`. It includes named tactile field capabilities, command feedback support,
+The unreleased capability schema is `1.5`. It includes named tactile field capabilities, command feedback support,
 `TelemetryCapability.payload_projection` and extended identity metadata. These
 fields change the ROSIDL types of capabilities and device info. Rebuild the
 message package, driver, GUI and external capability consumers together; a schema
@@ -84,8 +84,10 @@ All seven fields are covered by the [force interface guide](../linkerbot_hand_ro
 false flags outside that list do not assert normal device state. L20Lite exposes
 load overload, overcurrent, overtemperature, magnetic encoder abnormality and
 over/undervoltage with explanations. It has no clear-fault command.
-`StallProtectionCapability.has_hold_current/has_hold_torque` distinguish output
-quantity support; L20Lite C7 is torque, not current.
+`StallProtectionCapability.hold_current/has_hold_current` describe the shared
+post-stall current setting, including L20Lite C7. The obsolete
+`hold_torque/has_hold_torque` fields are removed. L20Lite exposes confirmed write
+echoes only; `read_supported=false` does not remove the available setter.
 
 中文约定：普通 `raw` 字段始终表示设备协议原值，不做物理单位换算；`percent` 仅表示
 SDK capability 定义的 `0..100` 映射。屈伸轴为 `0=弯曲，100=伸直`，侧摆和旋转轴的
@@ -96,7 +98,7 @@ that changes a public message or service must update its `Unreleased` section.
 
 `GetRawValues` reads the raw channel selected by its service endpoint:
 `~/get_configured_speeds`, `~/get_configured_accelerations`,
-`~/get_current_limits`, `~/get_effort_limits`, `~/get_motion_times`, or
+`~/get_current_limits`, `~/get_torques_limits`, `~/get_motion_times`, or
 `~/get_limit_compensations`. The driver creates each endpoint only if its
 telemetry capability is declared. It accepts `timeout_s` and returns `success`,
 a complete `HandTelemetry state`, and stable `error_code` / `message` fields.

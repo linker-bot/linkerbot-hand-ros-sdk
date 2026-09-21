@@ -151,16 +151,18 @@ def test_o6_save_parameters_service_tracks_acknowledged_operation(monkeypatch):
         ("stall_hold_currents", CommandSemantic.STALL_HOLD_CURRENTS),
     ],
 )
-def test_o6_stall_write_uses_latest_protocol_semantics_without_waiting(
+@pytest.mark.parametrize("model", ["o6", "l20lite"])
+def test_stall_write_uses_current_semantics_without_waiting(
     name,
     semantic,
+    model,
 ):
     rclpy.init()
     builder = DeviceBuilder()
     node = LinkerbotHandNode(device_factory=builder)
     try:
         result = node.set_parameters_atomically(
-            [Parameter("model", value="o6"), Parameter("side", value="right")]
+            [Parameter("model", value=model), Parameter("side", value="right")]
         )
         assert result.successful
         node.trigger_configure()

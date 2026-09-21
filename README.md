@@ -9,6 +9,9 @@ This repository contains two independently discoverable ROS 2 packages:
 
 The unreleased [unified tactile interface](linkerbot_hand_ros/docs/zh/force.md)
 requires the latest Hand SDK source and a rebuild of ROS messages and consumers.
+The unreleased current/torque API also requires the matching SDK source:
+use `current_limits` for electrical limits and O30-only `torques_limits` for its
+separate torque-limit object. See the [migration table](linkerbot_hand_ros/docs/ros_api.md#on-demand-raw-reads).
 The v2.0.0 commands below install the existing release.
 
 The complete dependency chain is

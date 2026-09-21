@@ -46,7 +46,7 @@ echo, protocol ACK or mechanical arrival. The SDK rejects `command_feedback_only
 with a nonzero angle rate if this flag is false. Use the connected SDK's declaration;
 the O30 command-feedback fix in Hand issue #148 also changes this value.
 
-Capability schema `1.4` includes this field, `force_fields`, `payload_projection`, and extended
+Capability schema `1.5` includes this field, `force_fields`, `payload_projection`, and extended
 identity metadata, changing the ROSIDL types. Rebuild messages, driver, GUI and all
 external capability consumers together. Old and new message builds must not be
 mixed; checking the revision string does not provide wire compatibility.
@@ -85,7 +85,7 @@ one process-local runtime. Separate driver processes cannot share that arbiter.
 | `~/command/speeds` | `linkerbot_hand_msgs/msg/HandRawCommand` | Protocol-raw configured speed |
 | `~/command/accelerations` | `linkerbot_hand_msgs/msg/HandRawCommand` | Protocol-raw configured acceleration |
 | `~/command/current_limits` | `linkerbot_hand_msgs/msg/HandRawCommand` | Protocol-raw current limit |
-| `~/command/effort_limits` | `linkerbot_hand_msgs/msg/HandRawCommand` | Protocol-raw dimensionless effort limit |
+| `~/command/torques_limits` | `linkerbot_hand_msgs/msg/HandRawCommand` | O30 0x06 raw torque limits, separate from 0x04 current limits |
 | `~/command/torques` | `linkerbot_hand_msgs/msg/HandRawCommand` | True torque only when capability supports it |
 | `~/command/motion_times` | `linkerbot_hand_msgs/msg/HandRawCommand` | Protocol-raw motion-time setting |
 | `~/command/limit_compensations` | `linkerbot_hand_msgs/msg/HandRawCommand` | Protocol-raw per-joint limit compensation; currently L6 |
@@ -153,7 +153,7 @@ reported side. Optional values carry presence flags (or VersionField.available);
 reported side is distinct from the configured/resolved side.
 
 `<semantic>` can be `measured_speeds`, `configured_speeds`,
-`configured_accelerations`, `currents`, `current_limits`, `effort_limits`,
+`configured_accelerations`, `currents`, `current_limits`, `torques_limits`,
 `torques`, `temperatures`, `faults`, `voltages`, `motion_times`, or
 `limit_compensations`, depending on
 verified capability. A state message is published only when its SDK sequence or
@@ -180,8 +180,8 @@ a command; it is neither a target echo nor a command acknowledgement.
 | `~/get_stall_protection` | `GetStallProtection` | Freshly reads all three supported stall settings |
 | `~/get_configured_speeds` | `GetRawValues` | Configured speeds; device query, write response or command cache according to capability |
 | `~/get_configured_accelerations` | `GetRawValues` | Configured accelerations |
-| `~/get_current_limits` | `GetRawValues` | Current limits; device query or command cache according to capability |
-| `~/get_effort_limits` | `GetRawValues` | Effort channel; L20/L20Lite return measured live load |
+| `~/get_current_limits` | `GetRawValues` | Current limits; device query or command cache according to capability; absent on L20/L20Lite |
+| `~/get_torques_limits` | `GetRawValues` | O30 0x06 torque limit configuration, not measured torque |
 | `~/get_motion_times` | `GetRawValues` | Motion-time configuration |
 | `~/set_stall_detection_times` | `SetRawValues` | Asynchronous raw configuration acceptance |
 | `~/set_stall_thresholds` | `SetRawValues` | Asynchronous raw configuration acceptance |
@@ -206,6 +206,12 @@ See the [Chinese API reference](zh/ros_api.md) for examples and QoS details.
 
 ## On-Demand Raw Reads
 
+Stall output uses `hold_current` for every supported model, including L20Lite C7.
+The old `hold_torque/has_hold_torque` fields are removed in schema 1.5; rebuild
+messages, driver, GUI and external consumers together. L20Lite exposes all three
+stall setter services using the shared FIFO. Its state contains confirmed write
+echoes with original metadata, and no `get_stall_protection` read service exists.
+
 The six `GetRawValues` endpoints above are registered during configure when the
 corresponding telemetry capability exists. Call them while active. They reuse
 the SDK getters; subscribing to `~/state/<semantic>` only observes the cache
@@ -222,10 +228,24 @@ Read `~/capabilities.telemetry` to select the supported endpoint and its
 | `command_response` | Return the last valid device write response, without a new query | L6 configured speeds |
 | `command_cache` | Return the last valid locally dispatched command sample, without device confirmation or a new query | L30 configured speeds/current limits |
 
-For L20/L20Lite, `get_effort_limits` reads **current measured load**, not a saved
-limit; retain `device_measured=true` and the SDK's raw unit/scale explanation.
-ROS passes through SDK metadata for every model and does not infer physical
-torque from this method name.
+L20/L20Lite publish live current on `~/state/currents`, polled with `current_hz`,
+and retain `device_measured=true`. They have no current-limit readback service.
+O30 publishes measured current and torque on `~/state/currents` and
+`~/state/torques`, using `current_hz` and `torques_hz` respectively. Its two limit
+objects use `~/get_current_limits` and `~/get_torques_limits`, updating the
+corresponding limit state topics. All values and scale metadata come from the SDK.
+
+The old `effort_limits` names are removed:
+
+| Model | Former effort command/client method | Former effort state/read service |
+| --- | --- | --- |
+| L20 / L20Lite | `current_limits` / `set_current_limits()` | `currents` with `current_hz`; no limit readback |
+| O20 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits` |
+| O30 | `torques_limits` / `set_torques_limits()` | `torques_limits` / `get_torques_limits` |
+
+O30's existing 0x04 current interfaces remain independent of 0x06 torque.
+No current model declares a `set_torques()` command; setting a torque limit does
+not enable a live torque-target control API.
 
 `state` retains raw values, channel names, units, scale notes, confidence and
 `meta`. For cache/response modes, collection time and sequence remain those of

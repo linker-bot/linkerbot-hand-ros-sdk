@@ -40,7 +40,7 @@ _CHANNELS = (
     TelemetrySemantic.CONFIGURED_SPEEDS,
     TelemetrySemantic.CONFIGURED_ACCELERATIONS,
     TelemetrySemantic.CURRENT_LIMITS,
-    TelemetrySemantic.EFFORT_LIMITS,
+    TelemetrySemantic.TORQUES_LIMITS,
     TelemetrySemantic.MOTION_TIMES,
     TelemetrySemantic.LIMIT_COMPENSATIONS,
 )
@@ -341,12 +341,34 @@ def test_command_derived_reads_preserve_cache_without_device_io(
 
 
 @pytest.mark.parametrize("rig", ["L20", "L20Lite"], indirect=True)
-def test_effort_reads_remain_live_measurements(rig):
-    response = rig.call(TelemetrySemantic.EFFORT_LIMITS)
-    assert response.success
-    assert response.state.device_measured
-    assert response.state.device_queried
-    assert response.state.meta.origin == SampleMetadata.ORIGIN_DEVICE_RESPONSE
+def test_currents_are_polled_measurements_without_a_limit_read_service(rig):
+    services = {
+        rig.driver.resolve_service_name(service.srv_name)
+        for service in rig.driver._interfaces.management._services
+    }
+    for name in ("get_current_limits", "get_torques_limits", "get_effort_limits"):
+        assert rig.driver.resolve_service_name(f"~/{name}") not in services
+
+    states = []
+    subscription = rig.consumer.create_subscription(
+        HandTelemetry, "/linkerbot_hand/state/currents", states.append, STATE_QOS
+    )
+    try:
+        rig.spin_until(subscription.get_publisher_count)
+        assert rig.driver.set_parameters_atomically(
+            [Parameter("current_hz", value=10.0)]
+        ).successful
+        rig.spin_until(lambda: any(state.meta.valid for state in states))
+        state = next(state for state in states if state.meta.valid)
+        assert state.semantic == "currents"
+        assert state.device_measured and state.device_queried
+        assert state.meta.origin == SampleMetadata.ORIGIN_DEVICE_RESPONSE
+        assert list(state.raw) == [rig.peer.value] * len(state.channel_names)
+        assert state.raw_unit == "count"
+        assert rig.driver._require_device().get_snapshot().current_limits is None
+        assert not any(message[0] == "write" for message in rig.peer.sent)
+    finally:
+        rig.consumer.destroy_subscription(subscription)
 
 
 @pytest.mark.parametrize("timeout", [0.0, -1.0, float("nan"), float("inf"), 1.9])

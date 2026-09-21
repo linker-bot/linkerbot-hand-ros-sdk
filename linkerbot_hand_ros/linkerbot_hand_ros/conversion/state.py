@@ -12,7 +12,6 @@ from linkerbot_hand import (
     CurrentLimitSample,
     CurrentSample,
     DeviceCapabilities,
-    EffortLimitSample,
     FaultSample,
     ForceFieldSample,
     ForceSample,
@@ -28,6 +27,7 @@ from linkerbot_hand import (
     TelemetryCapability,
     TelemetrySemantic,
     TemperatureSample,
+    TorqueLimitSample,
     TorqueSample,
     UnsupportedOperationError,
     ValidationError,
@@ -44,7 +44,7 @@ RawVectorSample = (
     | ConfiguredAccelerationSample
     | CurrentSample
     | CurrentLimitSample
-    | EffortLimitSample
+    | TorqueLimitSample
     | TorqueSample
     | TemperatureSample
     | FaultSample
@@ -463,7 +463,7 @@ _RAW_VECTOR_SAMPLE_TYPES = (
     ConfiguredAccelerationSample,
     CurrentSample,
     CurrentLimitSample,
-    EffortLimitSample,
+    TorqueLimitSample,
     TorqueSample,
     TemperatureSample,
     FaultSample,

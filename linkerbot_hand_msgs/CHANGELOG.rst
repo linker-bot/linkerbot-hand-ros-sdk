@@ -10,6 +10,11 @@ a dated version section and create a new empty ``Unreleased`` section.
 Unreleased
 ----------
 
+* **Breaking wire/source change:** remove obsolete ``hold_torque`` and
+  ``has_hold_torque`` fields from ``StallProtectionCapability``. All supported
+  models, including L20Lite C7, use ``hold_current``. Schema 1.5 requires
+  rebuilding messages, driver, GUI and external capability consumers together.
+
 * Add ForceFieldCapability, ForceSensorValue and HandForceField with independent
   query metadata. Extend capabilities with named force fields, fault flag support
   and torque/current presence. Schema 1.4 requires rebuilding all consumers.

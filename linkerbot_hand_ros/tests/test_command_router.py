@@ -128,7 +128,7 @@ def test_joint_router_rejects_zero_client_id_before_sdk_submission():
         (CommandSemantic.SPEEDS, "set_speeds"),
         (CommandSemantic.ACCELERATIONS, "set_accelerations"),
         (CommandSemantic.CURRENT_LIMITS, "set_current_limits"),
-        (CommandSemantic.EFFORT_LIMITS, "set_effort_limits"),
+        (CommandSemantic.TORQUES_LIMITS, "set_torques_limits"),
         (CommandSemantic.TORQUES, "set_torques"),
         (CommandSemantic.MOTION_TIMES, "set_motion_times"),
         (

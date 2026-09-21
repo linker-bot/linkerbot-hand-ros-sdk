@@ -171,6 +171,36 @@ def test_wait_for_terminal_status_uses_sdk_stage_not_mechanical_arrival(client_r
     assert result[0].stage == HandCommandStatus.STAGE_DISPATCHED
 
 
+@pytest.mark.parametrize("model", ["L20", "L20Lite", "O20", "O30"])
+def test_current_and_torque_limit_publications_follow_distinct_capabilities(
+    client_rig, model
+):
+    client, _angle, publishers = client_rig
+    capabilities = get_declared_capabilities(model, side="left")
+    client._update_capabilities(
+        capabilities_to_message(
+            replace(
+                capabilities, identity=replace(capabilities.identity, verified=True)
+            )
+        )
+    )
+    count = len(capabilities.joints)
+    current = client.set_current_limits([40] * count)
+    assert current.semantic == "current_limits"
+    assert list(publishers["current_limits"].messages[-1].raw) == [40] * count
+    assert not publishers["torques_limits"].messages
+    if model == "O30":
+        torque = client.set_torques_limits([60] * count)
+        assert torque.semantic == "torques_limits"
+        assert list(publishers["torques_limits"].messages[-1].raw) == [60] * count
+        assert len(publishers["current_limits"].messages) == 1
+    else:
+        with pytest.raises(RuntimeError, match="does not declare torques_limits"):
+            client.set_torques_limits([60] * count)
+        assert not publishers["torques_limits"].messages
+    assert not hasattr(client, "set_effort_limits")
+
+
 def test_limit_compensation_client_preserves_raw_and_waits_for_ack(client_rig):
     client, _angle, raw = client_rig
     assert client.is_ready("limit_compensations")

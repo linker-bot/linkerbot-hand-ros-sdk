@@ -43,7 +43,7 @@ _RAW_SETTERS = {
     CommandSemantic.SPEEDS: "set_speeds",
     CommandSemantic.ACCELERATIONS: "set_accelerations",
     CommandSemantic.CURRENT_LIMITS: "set_current_limits",
-    CommandSemantic.EFFORT_LIMITS: "set_effort_limits",
+    CommandSemantic.TORQUES_LIMITS: "set_torques_limits",
     CommandSemantic.TORQUES: "set_torques",
     CommandSemantic.MOTION_TIMES: "set_motion_times",
     CommandSemantic.STALL_DETECTION_TIMES: "set_stall_detection_times",

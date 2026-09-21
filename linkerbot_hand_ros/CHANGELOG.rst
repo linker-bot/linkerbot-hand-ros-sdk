@@ -11,6 +11,18 @@ section.
 Unreleased
 ----------
 
+* Synchronize L20Lite C7 with ``set_stall_hold_currents`` and hold-current state.
+  Retain FIFO admission, confirmed write-echo metadata and no active read service.
+  Remove obsolete torque capability fields and advance the schema to 1.5;
+  rebuild all consumers with the matching messages and Hand SDK source.
+
+* **Breaking API change:** replace ``effort_limits`` with ``current_limits``
+  for L20/L20Lite/O20 and ``torques_limits`` for O30 across command topics,
+  client methods, state topics and raw-read services. L20/L20Lite measurements
+  use ``state/currents`` and ``current_hz``; they expose no limit-read service.
+  Preserve independent O30 current/torque objects, raw values and metadata.
+  Install the Hand SDK source containing the matching current/torque API.
+
 * Synchronize force_hz shorthand and per-field polling parameters with SDK
   shared-query scheduling. Report requested, physical-query and achieved rates
   separately; reset field overrides in the frequency benchmark and document

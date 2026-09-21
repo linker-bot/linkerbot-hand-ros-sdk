@@ -38,7 +38,7 @@ ros2 topic pub --once /linkerbot_hand/command/speeds \
   '{client_id: 1, user_sequence: 3, raw: [20, 20, 20, 20, 20, 20]}'
 ```
 
-电流上限、effort 上限和真实扭矩是不同接口：
+电流上限、O30 转矩上限和实时转矩是不同接口：
 
 ```bash
 ros2 topic pub --once /linkerbot_hand/command/current_limits \
@@ -77,8 +77,9 @@ O6 的该服务会主动查询配置速度，L6 返回最近一次有效速度�
 `state.raw_unit/raw_scale_note/unit_confidence`。
 
 同一服务类型还用于 `get_configured_accelerations`、`get_current_limits`、
-`get_effort_limits`、`get_motion_times` 和 `get_limit_compensations`，可用性以 capability
-为准。L20/L20Lite 的 `get_effort_limits` 返回当前实测负载。主动查询的样本也会经正常
+`get_torques_limits`、`get_motion_times` 和 `get_limit_compensations`，可用性以 capability
+为准。L20/L20Lite 使用 `current_hz` 和 `~/state/currents` 获取实时电流，没有限制回读服务。
+O30 `get_torques_limits` 读取独立的转矩限制。主动查询的样本也会经正常
 状态发布流程送到对应 `~/state/<semantic>`；仅订阅话题不会查询，也不会自动开启轮询。
 
 Python 业务节点可创建 `GetRawValues` client 并使用 `call_async()` 处理响应；不要在单线程

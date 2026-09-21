@@ -9,6 +9,8 @@
 
 未发布的统一触觉支持及各型号对应关系见[触觉字段指南](linkerbot_hand_ros/docs/zh/force.md)。
 该功能需要安装含统一触觉接口的最新 Hand SDK 源码，并重建 ROS 消息和所有消费者；
+电流/转矩接口也需要匹配的新 SDK 源码：电流限制统一使用 `current_limits`，O30 独立的
+转矩限制使用 `torques_limits`，详见[迁移表](linkerbot_hand_ros/docs/zh/ros_api.md#按需读取配置与限制状态)。
 下方 v2.0.0 命令对应既有正式版本。
 
 完整依赖链为

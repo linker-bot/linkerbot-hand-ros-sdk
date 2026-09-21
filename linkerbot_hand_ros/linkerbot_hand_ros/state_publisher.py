@@ -47,7 +47,7 @@ _SAMPLE_ATTRIBUTES = {
     TelemetrySemantic.CONFIGURED_ACCELERATIONS: "configured_accelerations",
     TelemetrySemantic.CURRENTS: "currents",
     TelemetrySemantic.CURRENT_LIMITS: "current_limits",
-    TelemetrySemantic.EFFORT_LIMITS: "effort_limits",
+    TelemetrySemantic.TORQUES_LIMITS: "torques_limits",
     TelemetrySemantic.TORQUES: "torques",
     TelemetrySemantic.TEMPERATURES: "temperatures",
     TelemetrySemantic.FAULTS: "faults",
