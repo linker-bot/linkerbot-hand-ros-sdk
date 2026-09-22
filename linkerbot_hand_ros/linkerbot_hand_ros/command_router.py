@@ -50,6 +50,9 @@ _RAW_SETTERS = {
     CommandSemantic.STALL_THRESHOLDS: "set_stall_thresholds",
     CommandSemantic.STALL_HOLD_CURRENTS: "set_stall_hold_currents",
     CommandSemantic.LIMIT_COMPENSATIONS: "set_limit_compensations",
+    CommandSemantic.POSITION_KP: "set_position_kp",
+    CommandSemantic.POSITION_KD: "set_position_kd",
+    CommandSemantic.TORQUE_KD: "set_torque_kd",
 }
 
 

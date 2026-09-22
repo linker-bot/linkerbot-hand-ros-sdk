@@ -43,6 +43,9 @@ _CHANNELS = (
     TelemetrySemantic.TORQUES_LIMITS,
     TelemetrySemantic.MOTION_TIMES,
     TelemetrySemantic.LIMIT_COMPENSATIONS,
+    TelemetrySemantic.POSITION_KP,
+    TelemetrySemantic.POSITION_KD,
+    TelemetrySemantic.TORQUE_KD,
 )
 
 
@@ -132,6 +135,9 @@ class RawReadPeer(FakeTransport):
         telemetry = {
             CommandSemantic.SPEEDS: TelemetrySemantic.CONFIGURED_SPEEDS,
             CommandSemantic.CURRENT_LIMITS: TelemetrySemantic.CURRENT_LIMITS,
+            CommandSemantic.POSITION_KP: TelemetrySemantic.POSITION_KP,
+            CommandSemantic.POSITION_KD: TelemetrySemantic.POSITION_KD,
+            CommandSemantic.TORQUE_KD: TelemetrySemantic.TORQUE_KD,
         }[semantic]
         cached = (
             capabilities.telemetry_channel(telemetry).read_mode

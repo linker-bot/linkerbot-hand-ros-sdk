@@ -37,6 +37,10 @@ SDK polling / scheduler -> linkerbot-transport -> 设备
 `HandCapabilities.firmware_unsupported_telemetry`。O6/L6 支持的配置持久化通过
 `/linkerbot_hand/save_parameters` 服务提交，并以 command status 的协议 ACK 判断成功。
 
+L6 的 `position_kp`、`position_kd`、`torque_kd` 已接通原值命令话题、
+`HandCommandClient` setter、设置/读取服务和缓存状态话题；范围、单位和 FIFO 行为见
+[L6 控制增益](docs/zh/ros_api.md#l6-控制增益)。读取按需进行，不新增增益轮询。
+
 ## 环境与安装
 
 - Ubuntu 24.04 + ROS 2 Jazzy

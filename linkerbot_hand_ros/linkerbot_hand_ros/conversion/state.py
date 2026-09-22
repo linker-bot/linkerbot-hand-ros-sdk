@@ -19,6 +19,8 @@ from linkerbot_hand import (
     MeasuredSpeedSample,
     MotionTimeSample,
     NormalForceResultantSample,
+    PositionKdSample,
+    PositionKpSample,
     SampleMeta,
     SampleProjection,
     StallDetectionTimeSample,
@@ -27,6 +29,7 @@ from linkerbot_hand import (
     TelemetryCapability,
     TelemetrySemantic,
     TemperatureSample,
+    TorqueKdSample,
     TorqueLimitSample,
     TorqueSample,
     UnsupportedOperationError,
@@ -54,6 +57,9 @@ RawVectorSample = (
     | StallThresholdSample
     | StallHoldCurrentSample
     | LimitCompensationSample
+    | PositionKpSample
+    | PositionKdSample
+    | TorqueKdSample
 )
 
 
@@ -485,6 +491,9 @@ _RAW_VECTOR_SAMPLE_TYPES = (
     StallThresholdSample,
     StallHoldCurrentSample,
     LimitCompensationSample,
+    PositionKpSample,
+    PositionKdSample,
+    TorqueKdSample,
 )
 
 __all__ = [

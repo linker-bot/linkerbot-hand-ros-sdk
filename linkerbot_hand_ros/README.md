@@ -27,6 +27,11 @@ Runtime optional-query fallback is republished through
 `firmware_unsupported_telemetry`; supported non-volatile configuration is
 submitted through the capability-gated `save_parameters` service.
 
+L6 control gains `position_kp`, `position_kd` and `torque_kd` have raw command
+topics, `HandCommandClient` setters, setter/getter services and cached state
+topics. See [L6 control gains](docs/ros_api.md#l6-control-gains) for ranges, units
+and FIFO behavior. Reading these parameters is on demand, without extra polling.
+
 ## Requirements
 
 - Ubuntu 24.04 and ROS 2 Jazzy

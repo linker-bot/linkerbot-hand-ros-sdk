@@ -58,6 +58,9 @@ _STALL_SETTERS = {
 _CONFIG_SETTERS = {
     **_STALL_SETTERS,
     "limit_compensations": CommandSemantic.LIMIT_COMPENSATIONS,
+    "position_kp": CommandSemantic.POSITION_KP,
+    "position_kd": CommandSemantic.POSITION_KD,
+    "torque_kd": CommandSemantic.TORQUE_KD,
 }
 _RAW_GETTERS = {
     TelemetrySemantic.CONFIGURED_SPEEDS: "get_configured_speeds",
@@ -66,6 +69,9 @@ _RAW_GETTERS = {
     TelemetrySemantic.TORQUES_LIMITS: "get_torques_limits",
     TelemetrySemantic.MOTION_TIMES: "get_motion_times",
     TelemetrySemantic.LIMIT_COMPENSATIONS: "get_limit_compensations",
+    TelemetrySemantic.POSITION_KP: "get_position_kp",
+    TelemetrySemantic.POSITION_KD: "get_position_kd",
+    TelemetrySemantic.TORQUE_KD: "get_torque_kd",
 }
 
 
@@ -169,12 +175,14 @@ class ManagementInterface:
                         response,
                     ),
                 )
-        if self._capabilities.command(CommandSemantic.LIMIT_COMPENSATIONS) is not None:
+        for name, semantic in _CONFIG_SETTERS.items():
+            if name in _STALL_SETTERS or self._capabilities.command(semantic) is None:
+                continue
             self._add_service(
                 SetRawValues,
-                "~/set_limit_compensations",
-                lambda request, response: self._set_raw_values(
-                    "limit_compensations", request, response
+                f"~/set_{name}",
+                lambda request, response, value=name: self._set_raw_values(
+                    value, request, response
                 ),
             )
         for semantic, getter in _RAW_GETTERS.items():

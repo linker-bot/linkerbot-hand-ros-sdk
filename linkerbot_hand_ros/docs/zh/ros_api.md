@@ -86,11 +86,12 @@ ros2 topic pub --once /linkerbot_hand/command/angles \
 | `~/command/torques` | 只有 capability 确认为真实扭矩时存在 |
 | `~/command/motion_times` | 协议 motion-time 配置 |
 | `~/command/limit_compensations` | 逐关节限位补偿原值，当前仅 L6 声明 |
+| `~/command/position_kp`、`~/command/position_kd`、`~/command/torque_kd` | L6 逐关节控制增益原值 |
 
 驱动 active 后只创建 capability 支持的订阅。命令 Topic 使用
 best-effort + keep-last(1)，不保证每条发布都进入 SDK。SDK 中角度、速度、电流上限、
-转矩上限和扭矩使用独立 latest slot；加速度、运动时间、限位补偿属于有界 FIFO 配置。
-需要明确接纳结果的低频限位补偿配置优先使用下方可靠服务。
+转矩上限和扭矩使用独立 latest slot；加速度、运动时间、限位补偿和控制增益属于有界 FIFO 配置。
+需要明确接纳结果的低频限位补偿或控制增益配置优先使用下方可靠服务。
 
 ## 命令阶段
 
@@ -155,6 +156,7 @@ device_measured, device_queried, meta
 - `~/state/voltages`
 - `~/state/motion_times`
 - `~/state/limit_compensations`
+- `~/state/position_kp`、`~/state/position_kd`、`~/state/torque_kd`（当前仅 L6）
 - `~/state/force`（标量 force profile）
 
 `raw_unit/raw_scale_note` 只是 capability 说明。ROS 不将 count 自动换算为 RPM、mA、N.m；
@@ -231,6 +233,8 @@ L20Lite C5/C6/C7 分别对应阈值、判定时间和维持电流：三个 sette
 | `~/set_stall_hold_currents` | `SetRawValues` | 非阻塞提交 raw 配置 |
 | `~/get_limit_compensations` | `GetRawValues` | 主动查询限位补偿原值、单位说明及采集元数据 |
 | `~/set_limit_compensations` | `SetRawValues` | 非阻塞提交 FIFO 配置，明确返回接纳或队列满 |
+| `~/get_position_kp`、`~/get_position_kd`、`~/get_torque_kd` | `GetRawValues` | L6 按需查询增益原值和元数据 |
+| `~/set_position_kp`、`~/set_position_kd`、`~/set_torque_kd` | `SetRawValues` | L6 增益有界 FIFO 接纳，异步等待协议确认 |
 | `~/save_parameters` | `SubmitCommand` | capability 支持时持久化配置；有协议 ACK 的设备等待明确确认 |
 | `~/clear_faults` | `SubmitCommand` | 独立有界 FIFO 的清错命令 |
 | `~/enable` / `~/disable` / `~/calibrate` | `SubmitCommand` | capability 支持时提交 |
@@ -256,7 +260,7 @@ current=`C7`。ROS 只收发 raw；当前资料给出的解释分别为 `1000/25
 
 ## 按需读取配置与限制状态
 
-上述六个 `GetRawValues` 入口在 configure 时按 telemetry capability 创建，在 active
+上述 `GetRawValues` 入口在 configure 时按 telemetry capability 创建，在 active
 状态下调用，直接复用 SDK getter。只有写命令能力不代表存在可读通道。订阅
 `~/state/<semantic>` 只是观察缓存，不会触发设备查询；主动查询成功后更新 SDK 缓存，
 启用状态发布时会发布变化后的样本。调用这些服务不增加轮询通道，也不发送配置写命令。
@@ -298,6 +302,36 @@ O30 `0x04` 现有电流接口保留，与 `0x06` 转矩对象独立；当前各�
 参数非法返回 `validation`；SDK 超时、协议等错误保留原有稳定错误码。`timeout_s` 必须
 有限且大于零，并为 `shutdown_timeout_s` 留出管理 worker 的结束余量。服务不增加固件
 版本门槛；查询仍与命令共享 SDK 设备/总线调度，应在总线预算内按需调用。
+
+## L6 控制增益
+
+三个增益使用 SDK 同名接口，只在当前型号声明对应能力时开放；当前为 L6。每次提交
+六关节原值，顺序见 `~/capabilities`，不会自动转换物理值、切换控制模式或保存到非易失存储。
+
+| 名称 | 协议码 | 原始范围与解释 | ROS 客户端 setter |
+| --- | --- | --- | --- |
+| `position_kp` | `0x06` | `0..200` 整数；位置模式；协议 Kp = raw × 10，默认 raw 50；通用字节范围与 Kp 上限有冲突，按 SDK 能力取值 | `set_position_kp(values)` |
+| `position_kd` | `0x07` | `0..255` 整数；位置模式；默认 21，建议不大于 40，建议值不是强制上限 | `set_position_kd(values)` |
+| `torque_kd` | `0x08` | `0..255` 整数；力矩模式；默认 1，没有明确物理单位或比例 | `set_torque_kd(values)` |
+
+Kd 原表概述 `0..255` 与逐字节说明 `1..255` 有冲突，ROS 沿用 SDK 能力，不另加范围。
+各通道的 `raw_unit`、`raw_scale_note`、`unit_confidence` 保留 SDK 描述；ROS 收发仍为原值。
+
+每个名称都对应以下通路，例如 `position_kp`：
+
+- `~/command/position_kp`：`HandRawCommand`，与 `HandCommandClient.set_position_kp()` 对应。
+- `~/set_position_kp`：`SetRawValues`，可靠服务提交，`accepted` 只代表有界 FIFO 接纳；
+  队列满返回 `queue_full`，后续通过命令状态观察 `ACKNOWLEDGED` 或失败。
+- `~/get_position_kp`：`GetRawValues`，在 active 状态按需查询设备。
+- `~/state/position_kp`：`HandTelemetry`，只发布 SDK 缓存变化；订阅不会发 CAN 请求。
+
+`position_kd`、`torque_kd` 使用同样命名。写回包与配置查询保留 SDK 样本来源，均不是
+关节运动实测量。没有新增增益轮询参数，不应把这些配置加入默认高频采集。
+
+```bash
+ros2 service call /linkerbot_hand/get_position_kp \
+  linkerbot_hand_msgs/srv/GetRawValues '{timeout_s: 0.2}'
+```
 
 ## L6 限位补偿
 

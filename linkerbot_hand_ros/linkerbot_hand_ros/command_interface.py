@@ -49,6 +49,9 @@ _RAW_COMMANDS = (
     CommandSemantic.TORQUES,
     CommandSemantic.MOTION_TIMES,
     CommandSemantic.LIMIT_COMPENSATIONS,
+    CommandSemantic.POSITION_KP,
+    CommandSemantic.POSITION_KD,
+    CommandSemantic.TORQUE_KD,
 )
 _STATUS_BATCH_CAPACITY = 512
 

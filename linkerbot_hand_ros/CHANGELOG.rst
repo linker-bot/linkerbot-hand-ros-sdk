@@ -11,6 +11,12 @@ section.
 Unreleased
 ----------
 
+* Expose L6 ``position_kp``, ``position_kd`` and ``torque_kd`` through raw
+  command topics, typed command-client setters, reliable setter services,
+  on-demand getter services and cached state topics. Preserve SDK ranges,
+  units, scale notes and sample origins, use bounded FIFO admission, and do
+  not add gain polling. Requires the Hand SDK source with L6 gain support.
+
 * Expose configure-only ``recovery_max_attempts`` (3), ``recovery_timeout_s``
   (5.0 seconds), and ``recovery_retry_delay_s`` (0.2 seconds) consistently in
   node defaults, launch and YAML. Document response-only retries, independent

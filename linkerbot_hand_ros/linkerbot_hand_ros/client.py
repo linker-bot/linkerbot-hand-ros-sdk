@@ -41,6 +41,9 @@ _RAW_COMMANDS = (
     "torques",
     "motion_times",
     "limit_compensations",
+    "position_kp",
+    "position_kd",
+    "torque_kd",
 )
 _TERMINAL_STAGES = {
     HandCommandStatus.STAGE_ACKNOWLEDGED,
@@ -337,6 +340,18 @@ class HandCommandClient:
         """
 
         return self._set_raw("limit_compensations", values)
+
+    def set_position_kp(self, values: Sequence[float]) -> CommandPublication:
+        """Publish raw position proportional gains; no physical conversion."""
+        return self._set_raw("position_kp", values)
+
+    def set_position_kd(self, values: Sequence[float]) -> CommandPublication:
+        """Publish raw position derivative gains in capability channel order."""
+        return self._set_raw("position_kd", values)
+
+    def set_torque_kd(self, values: Sequence[float]) -> CommandPublication:
+        """Publish raw torque derivative gains; observe status for device ACK."""
+        return self._set_raw("torque_kd", values)
 
     def get_status(self, user_sequence: int) -> HandCommandStatus | None:
         """Return the latest cached SDK stage for one published command."""

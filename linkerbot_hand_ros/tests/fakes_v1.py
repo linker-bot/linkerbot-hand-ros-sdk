@@ -37,6 +37,9 @@ _FAMILIES = {
     CommandSemantic.STALL_THRESHOLDS: CommandFamily.STALL_CONFIGURATION,
     CommandSemantic.STALL_HOLD_CURRENTS: CommandFamily.STALL_CONFIGURATION,
     CommandSemantic.LIMIT_COMPENSATIONS: CommandFamily.LIMIT_COMPENSATION,
+    CommandSemantic.POSITION_KP: CommandFamily.CONTROL_GAIN,
+    CommandSemantic.POSITION_KD: CommandFamily.CONTROL_GAIN,
+    CommandSemantic.TORQUE_KD: CommandFamily.CONTROL_GAIN,
 }
 _SNAPSHOT_ATTRIBUTES = {
     TelemetrySemantic.ANGLES: "angles",
@@ -56,6 +59,9 @@ _SNAPSHOT_ATTRIBUTES = {
     TelemetrySemantic.STALL_THRESHOLDS: "stall_thresholds",
     TelemetrySemantic.STALL_HOLD_CURRENTS: "stall_hold_currents",
     TelemetrySemantic.LIMIT_COMPENSATIONS: "limit_compensations",
+    TelemetrySemantic.POSITION_KP: "position_kp",
+    TelemetrySemantic.POSITION_KD: "position_kd",
+    TelemetrySemantic.TORQUE_KD: "torque_kd",
 }
 
 

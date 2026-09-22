@@ -112,6 +112,7 @@ one process-local runtime. Separate driver processes cannot share that arbiter.
 | `~/command/torques` | `linkerbot_hand_msgs/msg/HandRawCommand` | True torque only when capability supports it |
 | `~/command/motion_times` | `linkerbot_hand_msgs/msg/HandRawCommand` | Protocol-raw motion-time setting |
 | `~/command/limit_compensations` | `linkerbot_hand_msgs/msg/HandRawCommand` | Protocol-raw per-joint limit compensation; currently L6 |
+| `~/command/position_kp`, `~/command/position_kd`, `~/command/torque_kd` | `linkerbot_hand_msgs/msg/HandRawCommand` | L6 raw per-joint control gains |
 | `~/command/status` | `linkerbot_hand_msgs/msg/HandCommandStatusBatch` | Bounded batch of changed SDK command histories |
 
 Continuous command topics use best-effort, depth-one QoS. Unsupported command
@@ -177,8 +178,8 @@ reported side is distinct from the configured/resolved side.
 
 `<semantic>` can be `measured_speeds`, `configured_speeds`,
 `configured_accelerations`, `currents`, `current_limits`, `torques_limits`,
-`torques`, `temperatures`, `faults`, `voltages`, `motion_times`, or
-`limit_compensations`, depending on
+`torques`, `temperatures`, `faults`, `voltages`, `motion_times`,
+`limit_compensations`, `position_kp`, `position_kd`, or `torque_kd`, depending on
 verified capability. A state message is published only when its SDK sequence or
 validity signature changes.
 
@@ -220,6 +221,8 @@ all fault-topic consumers together.
 | `~/set_stall_hold_currents` | `SetRawValues` | Asynchronous raw configuration acceptance |
 | `~/get_limit_compensations` | `GetRawValues` | Fresh raw limit configuration with units and sample metadata |
 | `~/set_limit_compensations` | `SetRawValues` | Asynchronous FIFO admission; reports queue-full rejection |
+| `~/get_position_kp`, `~/get_position_kd`, `~/get_torque_kd` | `GetRawValues` | Fresh L6 raw gain values, units and sample metadata |
+| `~/set_position_kp`, `~/set_position_kd`, `~/set_torque_kd` | `SetRawValues` | L6 gain FIFO admission; protocol completion is reported asynchronously |
 | `~/save_parameters` | `SubmitCommand` | Capability-gated non-volatile save; observe command status for protocol ACK |
 | `~/clear_faults` | `SubmitCommand` | Asynchronous discrete command acceptance |
 | `~/enable`, `~/disable`, `~/calibrate` | `SubmitCommand` | Capability-gated asynchronous acceptance |
@@ -236,6 +239,30 @@ benchmarks distinguish active angle queries from verified command feedback.
 
 See the [Chinese API reference](zh/ros_api.md) for examples and QoS details.
 
+## L6 Control Gains
+
+`HandCommandClient.set_position_kp(values)`, `set_position_kd(values)` and
+`set_torque_kd(values)` publish six raw joint values to their matching
+`~/command/<name>` topics. Reliable `~/set_<name>` services report bounded FIFO
+admission; `accepted` does not mean a device ACK. Correlate service commands by
+their returned `command_id`, and topic commands by `(client_id, user_sequence)`.
+All three share the SDK's configuration FIFO without replacing each other.
+
+| Name | Opcode | Raw meaning and range |
+| --- | --- | --- |
+| `position_kp` | `0x06` | Position mode, integers 0..200; physical Kp = raw × 10, default raw 50. SDK uses the documented Kp upper bound where the generic byte range conflicts. |
+| `position_kd` | `0x07` | Position mode, integers 0..255; default 21, recommended maximum 40 is not a hard limit. |
+| `torque_kd` | `0x08` | Torque mode, integers 0..255; default 1, no physical unit or scaling specified. |
+
+The Kd overview permits 0..255 while its per-byte description says 1..255;
+ROS uses SDK capability ranges and retains its conflict notes. Values remain
+raw, with no multiplication, automatic mode switch or non-volatile save.
+Call `~/get_<name>` with `GetRawValues` while active for a fresh device read;
+observe `~/state/<name>` for changed cached samples. Query and write-response
+samples retain SDK origins, units and scale notes, and are configuration rather
+than physical measurements. There are no gain polling parameters. Unsupported
+models expose none of these services or driver subscriptions.
+
 ## On-Demand Raw Reads
 
 Stall output uses `hold_current` for every supported model, including L20Lite C7.
@@ -244,7 +271,7 @@ messages, driver, GUI and external consumers together. L20Lite exposes all three
 stall setter services using the shared FIFO. Its state contains confirmed write
 echoes with original metadata, and no `get_stall_protection` read service exists.
 
-The six `GetRawValues` endpoints above are registered during configure when the
+The `GetRawValues` endpoints above are registered during configure when the
 corresponding telemetry capability exists. Call them while active. They reuse
 the SDK getters; subscribing to `~/state/<semantic>` only observes the cache
 and does not query the device. A successful query updates that cache, and normal
