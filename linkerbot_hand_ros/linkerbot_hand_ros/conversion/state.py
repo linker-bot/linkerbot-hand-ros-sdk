@@ -226,6 +226,18 @@ _FAULT_FLAGS = (
     "load_overload",
     "magnetic_encoder_abnormal",
     "voltage_abnormal",
+    "mcu_over_temperature",
+    "motor_over_temperature",
+    "overload_2",
+    "overload_1",
+    "phase_a_over_current",
+    "phase_c_over_current",
+    "phase_b_over_current",
+    "motor_communication_abnormal",
+    "soft_rotor_lock",
+    "motor_self_test_abnormal",
+    "motor_stall",
+    "motor_rotor_lock",
 )
 
 

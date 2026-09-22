@@ -192,6 +192,18 @@ force capability 的 `payload_projection` 决定公共发布契约：
 `has_hold_current`，包括 L20Lite C7；旧 `hold_torque/has_hold_torque` 已删除。
 schema 1.5 需要一起重建消息包、驱动、GUI 和外部消费者。
 
+`~/state/fault_statuses` 的 L6/L20 具名字段与 SDK 一致：
+
+| 型号 | 字段与含义 |
+| --- | --- |
+| L6 | `mcu_over_temperature` MCU 过温；`motor_over_temperature` 电机过温；`overload_2`、`overload_1` 两种过载标志；`phase_a_over_current`、`phase_c_over_current`、`phase_b_over_current` 分别为 A/C/B 相过流 |
+| L20 | `motor_communication_abnormal` 电机通信异常；`soft_rotor_lock` 软堵转；`motor_self_test_abnormal` 电机自检异常；`motor_stall` 失速；`motor_rotor_lock` 堵转；以及 `over_temperature`、`over_current`、`voltage_abnormal` |
+
+L6 不把 MCU 与电机过温合并为通用过温，也不合并各相过流。L20 软堵转与失速、堵转
+分别保留；软堵转可能在抓握时出现、释放后自动解除，不表示清错命令。`raw`、保留位和
+文字解释仍原样提供。新增字段改变了嵌套的 ROS 故障消息类型，发布方与所有订阅方必须
+一起重建消息包和依赖包；不能混用旧版故障消息。
+
 ## 堵转状态
 
 `~/state/stall_protection` 使用 `HandStallProtectionState`，分别保存 detection times、

@@ -84,6 +84,17 @@ All seven fields are covered by the [force interface guide](../linkerbot_hand_ro
 false flags outside that list do not assert normal device state. L20Lite exposes
 load overload, overcurrent, overtemperature, magnetic encoder abnormality and
 over/undervoltage with explanations. It has no clear-fault command.
+
+L6 additionally exposes `mcu_over_temperature`, `motor_over_temperature`,
+`overload_2`, `overload_1`, `phase_a_over_current`, `phase_c_over_current`,
+and `phase_b_over_current`. L20 exposes `motor_communication_abnormal`,
+`soft_rotor_lock`, `motor_self_test_abnormal`, `motor_stall`, and
+`motor_rotor_lock` alongside its existing temperature, voltage and current flags.
+These are separate meanings, not aliases of generic overtemperature or stall.
+The flags use the SDK names; `raw`, `reserved_bits` and `descriptions` remain
+unchanged. This adds fields to the nested fault wire type: rebuild messages,
+driver and all `HandFaultStatusState` consumers together before exchanging it.
+
 `StallProtectionCapability.hold_current/has_hold_current` describe the shared
 post-stall current setting, including L20Lite C7. The obsolete
 `hold_torque/has_hold_torque` fields are removed. L20Lite exposes confirmed write

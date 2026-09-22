@@ -652,15 +652,23 @@ def test_o30_publishes_decoded_fault_statuses_alongside_raw_faults():
 
 
 @pytest.mark.parametrize(
-    ("model", "side"),
-    [("l6", "right"), ("o6", "right"), ("l20", "right"), ("l30", None)],
+    ("model", "side", "decoded"),
+    [
+        ("l6", "right", True),
+        ("o6", "right", True),
+        ("l20lite", "right", True),
+        ("l20", "right", True),
+        ("o30", "right", True),
+        ("l30", None, False),
+        ("o20", "right", False),
+    ],
 )
-def test_models_without_documented_fault_bits_get_no_status_topic(model, side):
+def test_fault_status_topic_matches_documented_model_support(model, side, decoded):
     capabilities = get_declared_capabilities(model, side=side)
 
     publisher = SnapshotPublisher(_RecordingNode(), capabilities)
 
-    assert publisher._fault_status_publisher is None
+    assert (publisher._fault_status_publisher is not None) is decoded
 
 
 @pytest.mark.parametrize(

@@ -17,6 +17,11 @@ Unreleased
   caller/execution budgets, late-reply limits and automatic reconnect cycles.
   Requires the Hand SDK source supporting bounded recovery.
 
+* Complete L6/L20 structured fault publication with the SDK's distinct named
+  flags, preserving raw bytes, reserved bits, descriptions and metadata. Other
+  models retain their own ``supported_flags``. The nested fault message changes
+  its ROS wire type; rebuild the messages and all fault-topic consumers together.
+
 * Default ``transaction_timeout_s`` to ``0.0`` and map it to SDK ``None`` to
   preserve each protocol's response window. Positive values override ordinary
   response stages; invalid values remain rejected. Clarify that identity timeouts

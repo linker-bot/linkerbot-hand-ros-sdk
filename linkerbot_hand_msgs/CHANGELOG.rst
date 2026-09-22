@@ -10,6 +10,13 @@ a dated version section and create a new empty ``Unreleased`` section.
 Unreleased
 ----------
 
+* **Breaking wire change:** add the seven L6-specific and five missing L20
+  named flags to ``HandJointFaultStatus``. Keep exact bytes, reserved bits,
+  descriptions and per-protocol ``supported_flags``. Rebuild the message
+  package, driver and all fault-topic consumers together; do not mix old and
+  new ``HandFaultStatusState`` types. Capability fields and package versions
+  are unchanged by this fix.
+
 * **Breaking wire/source change:** remove obsolete ``hold_torque`` and
   ``has_hold_torque`` fields from ``StallProtectionCapability``. All supported
   models, including L20Lite C7, use ``hold_current``. Schema 1.5 requires

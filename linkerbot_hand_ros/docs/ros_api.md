@@ -195,6 +195,15 @@ converted to RPM, mA, N.m, or other physical units by ROS.
 `ORIGIN_DEVICE_COMMAND_FEEDBACK` identifies verified current state returned by
 a command; it is neither a target echo nor a command acknowledgement.
 
+The decoded `~/state/fault_statuses` topic preserves the SDK's model-specific
+flags, raw byte, reserved bits and explanations. Only names in `supported_flags`
+have a defined meaning; other false values do not mean the device is healthy.
+L6 keeps MCU/motor temperatures, both overload flags and A/C/B phase currents
+separate. L20 keeps motor communication, self-test, soft lock, stall and rotor
+lock separate. See the [message field reference](../../linkerbot_hand_msgs/README.md).
+The added fault fields change the ROS wire type: rebuild messages, driver and
+all fault-topic consumers together.
+
 ## Services
 
 | Service | Type | Result semantics |
