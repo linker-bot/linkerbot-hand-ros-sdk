@@ -225,7 +225,7 @@ L20Lite C5/C6/C7 分别对应阈值、判定时间和维持电流：三个 sette
 | `~/get_stall_protection` | `GetStallProtection` | 在一个总 timeout 内读取三项堵转配置 |
 | `~/get_configured_speeds` | `GetRawValues` | 配置速度；按能力查询设备或读取写入回包/本地命令缓存 |
 | `~/get_configured_accelerations` | `GetRawValues` | 配置加速度 |
-| `~/get_current_limits` | `GetRawValues` | 电流上限；按能力查询设备或读取本地命令缓存，L20/L20Lite 不提供 |
+| `~/get_current_limits` | `GetRawValues` | 电流上限；按能力查询设备或读取写回包/本地命令缓存，L20 不提供 |
 | `~/get_torques_limits` | `GetRawValues` | O30 `0x06` 转矩限制配置，不是实时转矩 |
 | `~/get_motion_times` | `GetRawValues` | 运动时间配置 |
 | `~/set_stall_detection_times` | `SetRawValues` | 非阻塞提交 raw 配置 |
@@ -270,11 +270,20 @@ current=`C7`。ROS 只收发 raw；当前资料给出的解释分别为 `1000/25
 | `read_mode` | 调用行为 | 当前示例 |
 | --- | --- | --- |
 | `query` | 请求调用之后的新设备样本 | O6 配置速度/加速度/电流上限；O30 运动时间 |
-| `command_response` | 返回最近一次有效的设备写入回包，不发新查询 | L6 配置速度 |
+| `command_response` | 返回最近一次有效的设备写入回包，不发新查询 | L6 配置速度；L20Lite 配置速度/电流上限 |
 | `command_cache` | 返回最近一次有效的本地已发送命令缓存，不表示设备已确认，不发新查询 | L30 配置速度/电流上限 |
 
 L20/L20Lite 的实时电流由 `current_hz` 轮询并发布到 `~/state/currents`，
-保留 `device_measured=true`；没有电流限制回读服务。O30 的实时电流与转矩分别使用
+保留 `device_measured=true`；L20 仍没有电流限制回读服务。
+使用已隔离 L20Lite 设置回显的 Hand SDK 源码时，L20Lite 的
+`~/get_configured_speeds`、`~/get_current_limits` 按 `command_response` 读取缓存。
+`~/command/speeds`、`~/command/current_limits` 收齐两组有效写回包后才进入
+`ACKNOWLEDGED`；设备实际回值发布到 `~/state/configured_speeds`、`~/state/current_limits`，
+来源为 `ORIGIN_DEVICE_CONFIG_RESPONSE`，`device_measured=false`、`device_queried=false`。
+读取服务不发设备请求，不刷新样本 sequence 或采集时刻；尚无完整回显时返回
+`unsupported_operation` 和无效状态。实时速度、电流的查询与轮询仍与写回显分开。
+此行为需要包含 L20Lite 设置回显缓存支持的 Hand SDK，无需修改 ROS 消息。
+O30 的实时电流与转矩分别使用
 `current_hz` / `torques_hz`，发布到 `~/state/currents` / `~/state/torques`；限制值分别使用
 `~/get_current_limits` / `~/get_torques_limits` 服务，发布到对应限制状态话题。
 所有型号均透传 SDK 的原始单位、比例说明，不增加物理换算。
@@ -283,7 +292,8 @@ L20/L20Lite 的实时电流由 `current_hz` 轮询并发布到 `~/state/currents
 
 | 型号 | 原命令 `effort_limits` / 客户端 `set_effort_limits()` | 原状态 / 读取服务 |
 | --- | --- | --- |
-| L20 / L20Lite | `current_limits` / `set_current_limits()` | 状态改为 `currents`；使用 `current_hz`，无限制回读 |
+| L20 | `current_limits` / `set_current_limits()` | 状态改为 `currents`；使用 `current_hz`，无限制回读 |
+| L20Lite | `current_limits` / `set_current_limits()` | 实时 `currents` 使用 `current_hz`；独立的 `current_limits` 状态/服务保留完整写回显，不发查询 |
 | O20 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits` |
 | O30 | `torques_limits` / `set_torques_limits()` | `torques_limits` / `get_torques_limits` |
 

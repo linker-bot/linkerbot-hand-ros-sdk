@@ -26,14 +26,21 @@ from linkerbot_hand.protocols import (
     SamplePayload,
 )
 from linkerbot_hand_ros.node import LinkerbotHandNode
-from linkerbot_hand_ros.qos import COMMAND_QOS, STATE_QOS
+from linkerbot_hand_ros.qos import COMMAND_QOS, STATE_QOS, STATUS_QOS
 from linkerbot_transport.testing import FakeTransport
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.lifecycle import TransitionCallbackReturn
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 
-from linkerbot_hand_msgs.msg import HandJointCommand, HandTelemetry, SampleMetadata
+from linkerbot_hand_msgs.msg import (
+    HandCommandStatus,
+    HandCommandStatusBatch,
+    HandJointCommand,
+    HandRawCommand,
+    HandTelemetry,
+    SampleMetadata,
+)
 from linkerbot_hand_msgs.srv import GetRawValues
 
 _CHANNELS = (
@@ -59,10 +66,15 @@ class RawReadPeer(FakeTransport):
         super().__init__(route_key_of=lambda _message: self.route_keys[0])
         self.value = 11
         self.drop_reads = False
+        self.drop_writes = False
+        self.echo_value = None
 
     def send(self, message):
         receipt = super().send(message)
-        if not (self.drop_reads and message[0] == "read"):
+        if not (
+            (self.drop_reads and message[0] == "read")
+            or (self.drop_writes and message[0] == "write")
+        ):
             self.emit(message)
         return receipt
 
@@ -145,7 +157,7 @@ class RawReadPeer(FakeTransport):
         )
         payload = SamplePayload(
             semantic=telemetry,
-            raw=values,
+            raw=values if self.echo_value is None else (self.echo_value,) * len(values),
             origin=(
                 DataOrigin.COMMAND_CACHE
                 if cached
@@ -309,6 +321,18 @@ def test_declared_raw_services_query_fresh_samples_over_dds(rig):
             "set_current_limits",
             SampleMetadata.ORIGIN_COMMAND_CACHE,
         ),
+        (
+            "L20Lite",
+            TelemetrySemantic.CONFIGURED_SPEEDS,
+            "set_speeds",
+            SampleMetadata.ORIGIN_DEVICE_CONFIG_RESPONSE,
+        ),
+        (
+            "L20Lite",
+            TelemetrySemantic.CURRENT_LIMITS,
+            "set_current_limits",
+            SampleMetadata.ORIGIN_DEVICE_CONFIG_RESPONSE,
+        ),
     ],
     indirect=["rig"],
 )
@@ -343,16 +367,24 @@ def test_command_derived_reads_preserve_cache_without_device_io(
         assert not response.state.device_queried
         assert not response.state.device_measured
         assert "no device query performed" in response.message
+        cached = getattr(device.get_snapshot(), semantic.value)
+        assert cached.meta.collected_at == first_sample.meta.collected_at
     assert len(rig.peer.sent) == before
 
 
 @pytest.mark.parametrize("rig", ["L20", "L20Lite"], indirect=True)
-def test_currents_are_polled_measurements_without_a_limit_read_service(rig):
+def test_l20_family_live_current_polling_is_separate_from_configuration(rig):
+    device = rig.driver._require_device()
+    has_echo_cache = device.get_capabilities().model == "L20Lite"
     services = {
         rig.driver.resolve_service_name(service.srv_name)
         for service in rig.driver._interfaces.management._services
     }
-    for name in ("get_current_limits", "get_torques_limits", "get_effort_limits"):
+    for name in ("get_current_limits", "get_configured_speeds"):
+        assert (
+            rig.driver.resolve_service_name(f"~/{name}") in services
+        ) is has_echo_cache
+    for name in ("get_torques_limits", "get_effort_limits"):
         assert rig.driver.resolve_service_name(f"~/{name}") not in services
 
     states = []
@@ -371,10 +403,140 @@ def test_currents_are_polled_measurements_without_a_limit_read_service(rig):
         assert state.meta.origin == SampleMetadata.ORIGIN_DEVICE_RESPONSE
         assert list(state.raw) == [rig.peer.value] * len(state.channel_names)
         assert state.raw_unit == "count"
-        assert rig.driver._require_device().get_snapshot().current_limits is None
+        limit_sample = device.get_snapshot().current_limits
+        if has_echo_cache:
+            assert limit_sample is not None and not limit_sample.meta.valid
+        else:
+            assert limit_sample is None
         assert not any(message[0] == "write" for message in rig.peer.sent)
     finally:
         rig.consumer.destroy_subscription(subscription)
+
+
+_L20LITE_FEEDBACK_CASES = (
+    (CommandSemantic.SPEEDS, TelemetrySemantic.CONFIGURED_SPEEDS, "get_speeds"),
+    (CommandSemantic.CURRENT_LIMITS, TelemetrySemantic.CURRENT_LIMITS, "get_currents"),
+)
+
+
+@pytest.mark.parametrize("rig", ["L20Lite"], indirect=True)
+@pytest.mark.parametrize(
+    "command_semantic,feedback_semantic,live_getter", _L20LITE_FEEDBACK_CASES
+)
+def test_l20lite_echo_topics_and_services_do_not_replace_live_measurements(
+    rig, command_semantic, feedback_semantic, live_getter
+):
+    device = rig.driver._require_device()
+    feedback_capability = device.get_capabilities().telemetry_channel(feedback_semantic)
+    # The matching SDK source is required; an older SDK must fail, not skip.
+    assert feedback_capability is not None
+    assert feedback_capability.read_mode is ReadMode.COMMAND_RESPONSE
+    count = len(feedback_capability.channels)
+    actual = getattr(device, live_getter)(timeout=1)
+    live_attribute = "measured_speeds" if live_getter == "get_speeds" else "currents"
+    assert actual.raw == (11,) * count
+    states, statuses = [], []
+    state_subscription = rig.consumer.create_subscription(
+        HandTelemetry,
+        f"/linkerbot_hand/state/{feedback_semantic.value}",
+        states.append,
+        STATE_QOS,
+    )
+    status_subscription = rig.consumer.create_subscription(
+        HandCommandStatusBatch,
+        "/linkerbot_hand/command/status",
+        lambda batch: statuses.extend(batch.statuses),
+        STATUS_QOS,
+    )
+    publisher = rig.consumer.create_publisher(
+        HandRawCommand, f"/linkerbot_hand/command/{command_semantic.value}", COMMAND_QOS
+    )
+    try:
+        rig.spin_until(
+            lambda: (
+                publisher.get_subscription_count()
+                and state_subscription.get_publisher_count()
+                and status_subscription.get_publisher_count()
+            )
+        )
+        rig.peer.echo_value = 190
+        publisher.publish(
+            HandRawCommand(client_id=41, user_sequence=7, raw=[200.0] * count)
+        )
+        rig.spin_until(
+            lambda: any(
+                status.client_id == 41
+                and status.stage == HandCommandStatus.STAGE_ACKNOWLEDGED
+                for status in statuses
+            )
+        )
+        rig.spin_until(lambda: any(state.meta.valid for state in states))
+        feedback = next(state for state in states if state.meta.valid)
+        assert list(feedback.raw) == [190] * count
+        assert feedback.meta.origin == SampleMetadata.ORIGIN_DEVICE_CONFIG_RESPONSE
+        assert not feedback.device_measured and not feedback.device_queried
+        assert feedback.raw_unit == "count"
+        assert feedback.channel_names == list(feedback_capability.channels)
+        assert feedback.meta.connection_generation == actual.meta.connection_generation
+        unchanged = getattr(device.get_snapshot(), live_attribute)
+        assert unchanged.raw == actual.raw
+        assert unchanged.meta.sequence == actual.meta.sequence
+        assert unchanged.meta.collected_at == actual.meta.collected_at
+        assert rig.peer.sent[-1] == ("write", command_semantic, (200,) * count)
+        cached = getattr(device.get_snapshot(), feedback_semantic.value)
+        before = len(rig.peer.sent)
+        response = rig.call(feedback_semantic)
+        assert response.success
+        assert list(response.state.raw) == [190] * count
+        assert response.state.meta.sequence == feedback.meta.sequence
+        assert response.state.meta.origin == feedback.meta.origin
+        assert not response.state.device_measured and not response.state.device_queried
+        assert (
+            getattr(device.get_snapshot(), feedback_semantic.value).meta.collected_at
+            == cached.meta.collected_at
+        )
+        assert len(rig.peer.sent) == before
+        rig.peer.value = 12
+        new_actual = getattr(device, live_getter)(timeout=1)
+        assert new_actual.raw == (12,) * count
+        assert new_actual.meta.origin is DataOrigin.DEVICE_RESPONSE
+        assert new_actual.meta.sequence > actual.meta.sequence
+        assert rig.peer.sent[-1] == ("read", TelemetrySemantic(live_attribute))
+        assert (
+            getattr(device.get_snapshot(), feedback_semantic.value).raw
+            == (190,) * count
+        )
+    finally:
+        rig.consumer.destroy_publisher(publisher)
+        rig.consumer.destroy_subscription(state_subscription)
+        rig.consumer.destroy_subscription(status_subscription)
+
+
+@pytest.mark.parametrize("rig", ["L20Lite"], indirect=True)
+@pytest.mark.parametrize(
+    "command_semantic,feedback_semantic,live_getter", _L20LITE_FEEDBACK_CASES
+)
+def test_l20lite_failed_echo_keeps_cache_service_unavailable_without_querying(
+    rig, command_semantic, feedback_semantic, live_getter
+):
+    device = rig.driver._require_device()
+    capability = device.get_capabilities().telemetry_channel(feedback_semantic)
+    assert capability is not None and capability.read_mode is ReadMode.COMMAND_RESPONSE
+    rig.peer.drop_writes = True
+    handle = getattr(device, "set_" + command_semantic.value)(
+        [200] * len(capability.channels)
+    )
+    assert handle.wait(1) is CommandStage.FAILED
+    assert handle.error.code is ErrorCode.TIMEOUT
+    before = len(rig.peer.sent)
+    response = rig.call(feedback_semantic)
+    assert not response.success
+    assert response.error_code == ErrorCode.UNSUPPORTED_OPERATION.value
+    assert not response.state.meta.valid
+    assert len(rig.peer.sent) == before
+    assert getattr(device, live_getter)(timeout=1).raw == (11,) * len(
+        capability.channels
+    )
 
 
 @pytest.mark.parametrize("timeout", [0.0, -1.0, float("nan"), float("inf"), 1.9])

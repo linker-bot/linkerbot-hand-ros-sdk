@@ -213,7 +213,7 @@ all fault-topic consumers together.
 | `~/get_stall_protection` | `GetStallProtection` | Freshly reads all three supported stall settings |
 | `~/get_configured_speeds` | `GetRawValues` | Configured speeds; device query, write response or command cache according to capability |
 | `~/get_configured_accelerations` | `GetRawValues` | Configured accelerations |
-| `~/get_current_limits` | `GetRawValues` | Current limits; device query or command cache according to capability; absent on L20/L20Lite |
+| `~/get_current_limits` | `GetRawValues` | Current limits; device query, write-response cache or command cache according to capability; absent on L20 |
 | `~/get_torques_limits` | `GetRawValues` | O30 0x06 torque limit configuration, not measured torque |
 | `~/get_motion_times` | `GetRawValues` | Motion-time configuration |
 | `~/set_stall_detection_times` | `SetRawValues` | Asynchronous raw configuration acceptance |
@@ -284,11 +284,22 @@ Read `~/capabilities.telemetry` to select the supported endpoint and its
 | `read_mode` | Getter behavior | Current examples |
 | --- | --- | --- |
 | `query` | Request a post-call fresh device sample | O6 configured speeds/accelerations/current limits; O30 motion times |
-| `command_response` | Return the last valid device write response, without a new query | L6 configured speeds |
+| `command_response` | Return the last valid device write response, without a new query | L6 configured speeds; L20Lite configured speeds/current limits |
 | `command_cache` | Return the last valid locally dispatched command sample, without device confirmation or a new query | L30 configured speeds/current limits |
 
 L20/L20Lite publish live current on `~/state/currents`, polled with `current_hz`,
-and retain `device_measured=true`. They have no current-limit readback service.
+and retain `device_measured=true`. L20 has no current-limit readback service.
+With the Hand SDK source that isolates L20Lite setting echoes, L20Lite exposes
+`~/get_configured_speeds` and `~/get_current_limits` as `command_response` caches.
+Its `~/command/speeds` and `~/command/current_limits` finish as `ACKNOWLEDGED`
+only after both valid write replies arrive. Their actual returned values publish
+to `~/state/configured_speeds` and `~/state/current_limits` with
+`ORIGIN_DEVICE_CONFIG_RESPONSE`, `device_measured=false` and `device_queried=false`.
+These service calls send no device request and preserve sample sequence and time;
+before a complete echo exists they return `unsupported_operation` and invalid state.
+Live speed/current queries and polling remain independent of setting echoes.
+Use a Hand SDK containing the L20Lite setting-echo cache support for this behavior.
+No ROS message change is required.
 O30 publishes measured current and torque on `~/state/currents` and
 `~/state/torques`, using `current_hz` and `torques_hz` respectively. Its two limit
 objects use `~/get_current_limits` and `~/get_torques_limits`, updating the
@@ -298,7 +309,8 @@ The old `effort_limits` names are removed:
 
 | Model | Former effort command/client method | Former effort state/read service |
 | --- | --- | --- |
-| L20 / L20Lite | `current_limits` / `set_current_limits()` | `currents` with `current_hz`; no limit readback |
+| L20 | `current_limits` / `set_current_limits()` | `currents` with `current_hz`; no limit readback |
+| L20Lite | `current_limits` / `set_current_limits()` | Live `currents` with `current_hz`; separate `current_limits` state/getter retains complete write echoes without querying |
 | O20 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits` |
 | O30 | `torques_limits` / `set_torques_limits()` | `torques_limits` / `get_torques_limits` |
 

@@ -70,15 +70,16 @@ ros2 service call /linkerbot_hand/get_configured_speeds \
   linkerbot_hand_msgs/srv/GetRawValues '{timeout_s: 0.5}'
 ```
 
-O6 的该服务会主动查询配置速度，L6 返回最近一次有效速度写回包，L30 返回本地命令缓存。
-后两者不发送查询，没有有效样本时返回 `success=false`、`error_code=unsupported_operation`。
+O6 的该服务会主动查询配置速度，L6/L20Lite 返回最近一次有效速度写回包，L30 返回本地命令缓存。
+读取写回包或命令缓存时不发送查询，没有有效样本时返回 `success=false`、`error_code=unsupported_operation`。
 成功后仍需检查 `state.meta.valid/stale/age_s/origin/connection_generation`；服务不会把旧
 缓存的时刻或 sequence 改成新的。原值在 `state.raw`，解释在
 `state.raw_unit/raw_scale_note/unit_confidence`。
 
 同一服务类型还用于 `get_configured_accelerations`、`get_current_limits`、
 `get_torques_limits`、`get_motion_times` 和 `get_limit_compensations`，可用性以 capability
-为准。L20/L20Lite 使用 `current_hz` 和 `~/state/currents` 获取实时电流，没有限制回读服务。
+为准。L20/L20Lite 使用 `current_hz` 和 `~/state/currents` 获取实时电流；L20 没有限制回读服务。
+L20Lite 的 `get_current_limits` 读取完整写回包缓存，不查询实时电流，依赖支持该能力的新 SDK 源码。
 O30 `get_torques_limits` 读取独立的转矩限制。主动查询的样本也会经正常
 状态发布流程送到对应 `~/state/<semantic>`；仅订阅话题不会查询，也不会自动开启轮询。
 

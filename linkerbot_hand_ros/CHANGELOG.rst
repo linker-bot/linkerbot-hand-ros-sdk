@@ -42,9 +42,17 @@ Unreleased
 * **Breaking API change:** replace ``effort_limits`` with ``current_limits``
   for L20/L20Lite/O20 and ``torques_limits`` for O30 across command topics,
   client methods, state topics and raw-read services. L20/L20Lite measurements
-  use ``state/currents`` and ``current_hz``; they expose no limit-read service.
+  use ``state/currents`` and ``current_hz``. L20 has no limit-read service;
+  L20Lite's newer write-response cache support is described below.
   Preserve independent O30 current/torque objects, raw values and metadata.
   Install the Hand SDK source containing the matching current/torque API.
+
+* Synchronize L20Lite setting-feedback documentation and ROS regression tests
+  with the matching Hand SDK source. Configured-speed and current-limit services
+  return complete write-response caches without I/O; the state remains explicitly
+  non-measured and separate from live speed/current queries and polling. Missing
+  echoes never create valid configuration samples, and setting status follows
+  SDK acknowledgement. L20 behavior, production ROS code and messages are unchanged.
 
 * Synchronize force_hz shorthand and per-field polling parameters with SDK
   shared-query scheduling. Report requested, physical-query and achieved rates
