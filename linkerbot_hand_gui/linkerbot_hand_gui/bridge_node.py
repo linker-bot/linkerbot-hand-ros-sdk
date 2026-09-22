@@ -62,13 +62,15 @@ class O6GuiBridge(Node):
         self._side = side
         self._lock = threading.RLock()
         self._capabilities: HandCapabilities | None = None
-        self._latest_target: dict[str, float] | None = None
-        self._target_revision = 0
+        self._latest_target: tuple[float, ...] | None = None
+        # Keep the last observed effective target across disarming. JSP GUI
+        # repeats it with fresh stamps even when nobody touches a slider.
+        self._last_target_percent: tuple[float, ...] | None = None
         self._target_armed = False
         self._initial_state_seeded = False
         self._initial_state: dict[str, float] | None = None
         self._initial_seed_until = 0.0
-        self._last_valid_state = 0.0
+        self._last_valid_state: float | None = None
         self._connection_generation: int | None = None
         self._sequence = 0
         self._client_id = secrets.randbits(63) or 1
@@ -146,6 +148,8 @@ class O6GuiBridge(Node):
             return
         with self._lock:
             self._capabilities = message
+            if not message.identity.verified:
+                self._disarm_target_locked()
 
     def _on_state(self, message: HandJointState) -> None:
         with self._lock:
@@ -158,20 +162,27 @@ class O6GuiBridge(Node):
             self.get_logger().error("state/angles 关节顺序与 capability 不一致")
             return
         valid = bool(message.meta.valid and not message.meta.stale)
-        all_percent_valid = len(message.percent_valid) == len(
-            self._mapping.capability_names
-        ) and all(message.percent_valid)
+        all_percent_valid = (
+            len(message.percent) == len(self._mapping.capability_names)
+            and len(message.percent_valid) == len(self._mapping.capability_names)
+            and all(message.percent_valid)
+        )
         if valid and all_percent_valid:
             values = tuple(float(value) for value in message.percent)
+            actual = self._mapping.urdf_from_percent(values)
+            if len(actual) != len(self._mapping.urdf_names):
+                with self._lock:
+                    self._last_valid_state = None
+                    self._disarm_target_locked()
+                return
             with self._lock:
                 generation = int(message.meta.connection_generation)
-                if (
+                if not self._state_is_fresh_locked() or (
                     self._connection_generation is not None
                     and generation != self._connection_generation
                 ):
                     self._disarm_target_locked()
                 self._connection_generation = generation
-                actual = self._mapping.urdf_from_percent(values)
                 self._last_valid_state = time.monotonic()
                 seed_initial = not self._initial_state_seeded
                 if seed_initial:
@@ -189,6 +200,10 @@ class O6GuiBridge(Node):
                     actual,
                     message.meta.collected_at,
                 )
+        else:
+            with self._lock:
+                self._last_valid_state = None
+                self._disarm_target_locked()
 
     def _publish_initial_seed(self) -> None:
         """Bridge the first verified state to the GUI during DDS discovery."""
@@ -216,21 +231,25 @@ class O6GuiBridge(Node):
         if len(values) != len(self._mapping.urdf_names):
             return
         try:
-            self._mapping.percent_from_urdf(values)
+            percent = self._mapping.percent_from_urdf(values)
         except ValueError as error:
             self.get_logger().warning(f"忽略无效 O6 目标: {error}")
             return
         with self._lock:
-            # ``joint_state_publisher_gui`` emits a stream even when a slider
-            # is stationary.  Republish every valid sample so a late-joining
-            # robot_state_publisher (or a transient DDS discovery gap) still
-            # receives a current target.  Device commands remain separately
-            # rate-limited by ``_publish_latest_target`` and latest-wins, so
-            # this does not create a motion history or increase bus traffic.
-            self._latest_target = values
-            self._target_revision += 1
-            if self._control_enabled:
+            # Compare in command order after limits, ignoring stamps, name
+            # ordering and inactive/mimic joints. The first sample is a baseline.
+            changed = (
+                self._last_target_percent is not None
+                and percent != self._last_target_percent
+            )
+            self._last_target_percent = percent
+            if not self._can_control_locked():
+                self._disarm_target_locked()
+            elif changed:
+                self._latest_target = percent
                 self._target_armed = True
+            # Preview always receives valid repeats, including while disabled,
+            # so late-joining visualization nodes still receive current values.
             target = JointState(
                 header=message.header,
                 name=list(self._mapping.urdf_names),
@@ -240,39 +259,37 @@ class O6GuiBridge(Node):
 
     def _publish_latest_target(self) -> None:
         with self._lock:
-            target = None if self._latest_target is None else dict(self._latest_target)
-            capabilities = self._capabilities
-            enabled = self._control_enabled
-            state_age = time.monotonic() - self._last_valid_state
-            armed = self._target_armed
-        if not enabled or not armed or target is None or capabilities is None:
-            return
-        if not capabilities.identity.verified or state_age > 2.0:
-            if state_age > 2.0:
-                with self._lock:
-                    self._disarm_target_locked()
-            return
-        if not self._readiness.is_active(f"{self._driver_name}/command/angles"):
-            with self._lock:
+            if not self._can_control_locked():
                 self._disarm_target_locked()
-            return
-        try:
-            percent = self._mapping.percent_from_urdf(target)
-        except ValueError as error:
-            self.get_logger().warning(f"忽略无效 O6 目标: {error}")
-            return
-        with self._lock:
+                return
+            if not self._target_armed or self._latest_target is None:
+                return
+            # Serialize publication with disable, new feedback generations and
+            # incoming target changes; no pre-disarm snapshot is published later.
             self._sequence += 1
-            sequence = self._sequence
-        now = self.get_clock().now().to_msg()
-        self._command_publisher.publish(
-            HandJointCommand(
-                client_id=self._client_id,
-                user_sequence=sequence,
-                publisher_stamp=now,
-                representation=HandJointCommand.REPRESENTATION_PERCENT,
-                values=list(percent),
+            self._command_publisher.publish(
+                HandJointCommand(
+                    client_id=self._client_id,
+                    user_sequence=self._sequence,
+                    publisher_stamp=self.get_clock().now().to_msg(),
+                    representation=HandJointCommand.REPRESENTATION_PERCENT,
+                    values=list(self._latest_target),
+                )
             )
+
+    def _state_is_fresh_locked(self) -> bool:
+        return (
+            self._last_valid_state is not None
+            and time.monotonic() - self._last_valid_state <= 2.0
+        )
+
+    def _can_control_locked(self) -> bool:
+        return bool(
+            self._control_enabled
+            and self._capabilities is not None
+            and self._capabilities.identity.verified
+            and self._state_is_fresh_locked()
+            and self._readiness.is_active(f"{self._driver_name}/command/angles")
         )
 
     def _set_control_enabled(
@@ -295,7 +312,7 @@ class O6GuiBridge(Node):
                     return response
                 self._control_enabled = True
                 # Do not replay a preview target selected before explicit arming.
-                self._target_armed = False
+                self._disarm_target_locked()
             else:
                 self._control_enabled = False
                 self._disarm_target_locked()
@@ -308,7 +325,7 @@ class O6GuiBridge(Node):
         return super().destroy_node()
 
     def _disarm_target_locked(self) -> None:
-        """Drop the latest motion target while ``self._lock`` is held."""
+        """Drop motion permission, retaining the last observed slider baseline."""
 
         self._target_armed = False
         self._latest_target = None

@@ -64,7 +64,8 @@ ros2 launch linkerbot_hand_gui hand_gui.launch.py \
 
 启动后会出现独立的 `joint_state_publisher_gui` 滑块窗口（不是 RViz 内嵌面板）。启动器同时建立 `world` 到
 实际/目标两个模型根节点的静态 TF。滑块发布器会持续发布当前值，bridge 在启用
-控制后按 `command_rate_hz` 发送最新目标；停止或重新启用控制都会清空目标。
+控制后收到新的有效目标变化，才按 `command_rate_hz` 发送最新目标。
+停止或重新启用控制都会清除可发送目标，同时保留上次观察值用于识别静止广播。
 默认 launch 已经自动启动 RViz2；如需单独打开 RViz2，可用以下命令：
 
 ```bash
@@ -87,7 +88,8 @@ git -C ~/linker-sim-assets lfs pull
 驱动已经发布 `identity.verified=true`、生命周期为 active 后，显式启用控制。
 bridge 使用与 `HandCommandClient` 相同的生命周期查询和命令端点归属检查，不再将
 第三方订阅数当作驱动激活。查询每 0.2 秒刷新，状态证据从请求发出起最多有效 1 秒；
-失活或证据过期后停止发指令并清空目标。原有 2 秒角度反馈新鲜度和 generation 保护仍生效：
+失活或证据过期后停止发指令并解除目标发送资格。角度反馈无效、超过 2 秒未更新或
+generation 变化时也会解除发送资格，恢复后需要新的目标变化：
 
 ```bash
 ros2 service call /o6_gui_bridge/set_control_enabled std_srvs/srv/SetBool \
@@ -97,6 +99,14 @@ ros2 service call /o6_gui_bridge/set_control_enabled std_srvs/srv/SetBool \
 启用后再次拖动滑块，bridge 以固定频率发布最新目标到
 `/linkerbot_hand/command/angles`。中间只保留一个目标，不建立历史队列。停用控制
 会清空未发送目标，重新启用后必须再次移动滑块。
+
+启动后的第一条有效滑块消息只建立比较基线。后续按关节名称映射、URDF 限位转换后的
+percent 目标比较；只有时间戳变化、关节数组重排、非控制关节变化或限位外等效值变化，
+均不会被视为新的控制目标。静止广播仍会转发到目标模型预览。
+
+驱动不可用、身份未验证或反馈失效期间，编辑只更新预览和比较基线，不会留到恢复后补发。
+已经在有效控制状态下接受的目标仍按 `command_rate_hz` 持续发送，不要求滑块一直移动。
+消息本身没有鼠标事件信息，bridge 以有效目标值的变化判断新编辑。
 
 ## 主题和安全边界
 

@@ -73,9 +73,11 @@ def test_gui_rejects_observer_and_disarms_after_driver_deactivation(monkeypatch)
             executor,
             lambda: bridge._readiness.is_active("/linkerbot_hand/command/angles"),
         )
+        bridge._on_target(target)
         assert enable().success
         assert not bridge._target_armed
         bridge._last_valid_state = time.monotonic()
+        target.position = [0.6] * 6
         bridge._on_target(target)
         _spin_until(executor, lambda: bool(received))
         driver.trigger_deactivate()
@@ -102,6 +104,7 @@ def test_gui_rejects_observer_and_disarms_after_driver_deactivation(monkeypatch)
             lambda: bridge._readiness.is_active("/linkerbot_hand/command/angles"),
         )
         assert enable().success
+        target.position = [0.7] * 6
         bridge._on_target(target)
         bridge._last_valid_state = time.monotonic() - 3.0
         bridge._publish_latest_target()
