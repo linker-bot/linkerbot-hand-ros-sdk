@@ -147,6 +147,7 @@ class RawReadPeer(FakeTransport):
         telemetry = {
             CommandSemantic.SPEEDS: TelemetrySemantic.CONFIGURED_SPEEDS,
             CommandSemantic.CURRENT_LIMITS: TelemetrySemantic.CURRENT_LIMITS,
+            CommandSemantic.TORQUES: TelemetrySemantic.TORQUES,
             CommandSemantic.POSITION_KP: TelemetrySemantic.POSITION_KP,
             CommandSemantic.POSITION_KD: TelemetrySemantic.POSITION_KD,
             CommandSemantic.TORQUE_KD: TelemetrySemantic.TORQUE_KD,

@@ -119,10 +119,54 @@ def test_client_validates_from_published_capability_not_model_table(client_rig):
         client.set_percent_angles([101] * 6)
     with pytest.raises(ValueError, match="integer protocol"):
         client.set_angles([0.5] * 6)
-    with pytest.raises(RuntimeError, match="does not declare torques"):
-        client.set_torques([0] * 6)
     with pytest.raises(TypeError, match="bool"):
         client.set_percent_angles([True, 50, 50, 50, 50, 50])
+
+    capabilities = get_declared_capabilities("l6", side="left")
+    published = capabilities_to_message(
+        replace(capabilities, identity=replace(capabilities.identity, verified=True))
+    )
+    assert any(command.semantic == "torques" for command in published.commands)
+    published.commands = [
+        command for command in published.commands if command.semantic != "torques"
+    ]
+    client._update_capabilities(published)
+    assert published.identity.model == "L6"
+    assert not client.is_ready("torques")
+    with pytest.raises(RuntimeError, match="does not declare torques"):
+        client.set_torques([0] * 6)
+
+
+def test_l6_torque_client_preserves_mode_and_output_raw_values(client_rig):
+    client, _angle, raw = client_rig
+    assert client.is_ready("torques")
+    publication = client.set_torques([0, 1, 255, 0, 1, 255])
+    message = raw["torques"].messages[-1]
+    assert list(message.raw) == [0, 1, 255, 0, 1, 255]
+    assert publication.semantic == "torques" and publication.representation == "raw"
+    assert message.client_id == publication.client_id
+    assert message.user_sequence == publication.user_sequence
+    assert message.publisher_stamp == publication.publisher_stamp
+
+
+@pytest.mark.parametrize(
+    "values,error",
+    [
+        ([-1] * 6, ValueError),
+        ([256] * 6, ValueError),
+        ([0.5] * 6, ValueError),
+        ([float("nan")] * 6, ValueError),
+        ([True] * 6, TypeError),
+        ([0] * 5, ValueError),
+    ],
+)
+def test_l6_torque_client_rejects_invalid_raw_before_publication(
+    client_rig, values, error
+):
+    client, _angle, raw = client_rig
+    with pytest.raises(error):
+        client.set_torques(values)
+    assert raw["torques"].messages == []
 
 
 def test_raw_command_publication_uses_capability_channel_shape(client_rig):

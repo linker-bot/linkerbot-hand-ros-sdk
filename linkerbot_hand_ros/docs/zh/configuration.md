@@ -71,7 +71,7 @@ ros2 lifecycle set /linkerbot_hand activate
 | `temperature_hz` | `0` | SDK 温度查询 |
 | `current_hz` | `0` | SDK 实测电流查询 |
 | `faults_hz` | `0` | SDK 故障查询 |
-| `torques_hz` | `0` | SDK 真实扭矩查询，仅 capability 支持时 |
+| `torques_hz` | `0` | SDK 力矩通道查询，仅 capability 支持时；L6 为输出/模式原值，物理测量语义以 capability 为准 |
 | `voltage_hz` | `0` | SDK 电压查询 |
 | `publish_rate_hz` | `100` | 无新 revision 时的缓存 age/stale 复查频率 |
 | `diagnostic_rate_hz` | `1` | `/diagnostics` 发布频率 |

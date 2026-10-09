@@ -109,7 +109,7 @@ one process-local runtime. Separate driver processes cannot share that arbiter.
 | `~/command/accelerations` | `linkerbot_hand_msgs/msg/HandRawCommand` | Protocol-raw configured acceleration |
 | `~/command/current_limits` | `linkerbot_hand_msgs/msg/HandRawCommand` | Protocol-raw current limit |
 | `~/command/torques_limits` | `linkerbot_hand_msgs/msg/HandRawCommand` | O30 0x06 raw torque limits, separate from 0x04 current limits |
-| `~/command/torques` | `linkerbot_hand_msgs/msg/HandRawCommand` | True torque only when capability supports it |
+| `~/command/torques` | `linkerbot_hand_msgs/msg/HandRawCommand` | Capability-declared raw torque output/mode; currently L6, not calibrated N·m |
 | `~/command/motion_times` | `linkerbot_hand_msgs/msg/HandRawCommand` | Protocol-raw motion-time setting |
 | `~/command/limit_compensations` | `linkerbot_hand_msgs/msg/HandRawCommand` | Protocol-raw per-joint limit compensation; currently L6 |
 | `~/command/position_kp`, `~/command/position_kd`, `~/command/torque_kd` | `linkerbot_hand_msgs/msg/HandRawCommand` | L6 raw per-joint control gains |
@@ -126,6 +126,31 @@ that composite key and adds `driver_received_stamp` plus the complete SDK
 transition history. Clients must iterate every entry and match both ID fields;
 a final `ACKNOWLEDGED` status does not replace the explicit `DISPATCHED`
 transition when measuring actual sends.
+
+### L6 torque output/mode
+
+`HandCommandClient.set_torques(values)` publishes six integer raw values in
+capability joint order on `~/command/torques`. L6 opcode `0x03` accepts `0..255`:
+zero selects position mode for that joint; `1..255` selects torque mode and its
+output. These are protocol counts, not calibrated N·m or current limits.
+
+Once admitted, these commands share the SDK's bounded configuration/operation
+FIFO: a zero returning a joint to position mode must not be replaced by a later
+torque target. The ROS topic still uses best-effort depth-one QoS, so the FIFO
+does not guarantee admission of every DDS publication. Observe command status
+for accepted commands. The SDK guards mode changes with a 20 ms pre-dispatch
+delay and a post-dispatch delay of 150 ms if any value is zero, otherwise 20 ms;
+ROS does not implement a second timing loop.
+
+A valid write reply can contain the previous output/mode values. ACK confirms
+the exchange, not equality with the target. `~/state/torques` retains the actual
+reply, and `torques_hz` controls fresh SDK polling. The SDK's `get_torques()` can
+also query a fresh sample; no ROS `~/get_torques` service is exposed. L6 samples
+retain `raw_unit="count"`, `device_measured=false`, `device_queried=true` and
+`ORIGIN_DEVICE_CONFIG_RESPONSE`: `device_queried` describes the channel's query
+capability, while `meta.origin` describes this sample. The output/mode readback
+is not measured physical torque. Current limits (`0x02`) and live current
+(`0x36`) remain separate channels.
 
 ## State Topics
 
@@ -315,8 +340,9 @@ The old `effort_limits` names are removed:
 | O30 | `torques_limits` / `set_torques_limits()` | `torques_limits` / `get_torques_limits` |
 
 O30's existing 0x04 current interfaces remain independent of 0x06 torque.
-No current model declares a `set_torques()` command; setting a torque limit does
-not enable a live torque-target control API.
+L6 declares the raw `set_torques()` output/mode command described above. O30's
+torque-limit command does not enable that command; command and telemetry
+capabilities remain independent.
 
 `state` retains raw values, channel names, units, scale notes, confidence and
 `meta`. For cache/response modes, collection time and sequence remain those of

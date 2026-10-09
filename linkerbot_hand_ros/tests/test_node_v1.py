@@ -141,7 +141,7 @@ def test_configure_only_creates_capability_supported_ros_entities(node_rig):
     publisher_topics = {name for name, _types in node.get_topic_names_and_types()}
     service_names = {name for name, _types in node.get_service_names_and_types()}
     assert "/linkerbot_hand/state/currents" in publisher_topics
-    assert "/linkerbot_hand/state/torques" not in publisher_topics
+    assert "/linkerbot_hand/state/torques" in publisher_topics
     assert "/linkerbot_hand/clear_faults" in service_names
     assert "/linkerbot_hand/save_parameters" in service_names
     assert "/linkerbot_hand/enable" not in service_names

@@ -11,6 +11,13 @@ section.
 Unreleased
 ----------
 
+* Align L6 torque tests and API documentation with the Hand SDK source:
+  ``command/torques`` accepts raw output/mode counts, ``state/torques`` is
+  capability-driven, and accepted mode writes use FIFO rather than latest-wins.
+  Preserve prior-value write echoes and queried, non-measured sample metadata;
+  do not interpret raw output as calibrated N*m. Add ROS client, lifecycle,
+  bounded-admission and real-SDK/cache state regression coverage.
+
 * Expose L6 ``position_kp``, ``position_kd`` and ``torque_kd`` through raw
   command topics, typed command-client setters, reliable setter services,
   on-demand getter services and cached state topics. Preserve SDK ranges,

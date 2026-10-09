@@ -83,14 +83,14 @@ ros2 topic pub --once /linkerbot_hand/command/angles \
 | `~/command/accelerations` | configured acceleration |
 | `~/command/current_limits` | 电流上限，不等于真实扭矩 |
 | `~/command/torques_limits` | O30 `0x06` 转矩限制原值，与 `0x04` 电流限制分开 |
-| `~/command/torques` | 只有 capability 确认为真实扭矩时存在 |
+| `~/command/torques` | capability 声明的力矩输出/模式原值，当前为 L6，不是已校准 N·m |
 | `~/command/motion_times` | 协议 motion-time 配置 |
 | `~/command/limit_compensations` | 逐关节限位补偿原值，当前仅 L6 声明 |
 | `~/command/position_kp`、`~/command/position_kd`、`~/command/torque_kd` | L6 逐关节控制增益原值 |
 
 驱动 active 后只创建 capability 支持的订阅。命令 Topic 使用
 best-effort + keep-last(1)，不保证每条发布都进入 SDK。SDK 中角度、速度、电流上限、
-转矩上限和扭矩使用独立 latest slot；加速度、运动时间、限位补偿和控制增益属于有界 FIFO 配置。
+转矩上限使用独立 latest slot；L6 力矩输出/模式、加速度、运动时间、限位补偿和控制增益使用有界 FIFO。
 需要明确接纳结果的低频限位补偿或控制增益配置优先使用下方可靠服务。
 
 ## 命令阶段
@@ -113,6 +113,25 @@ Topic：`~/command/status`
 `command_id` 是 SDK 内部命令标识。`publisher_stamp` 原样回传发布时刻，
 `driver_received_stamp` 是驱动 callback 入口时刻，`transitions[]` 保留 SDK 每个阶段的时刻；
 统计 DISPATCHED 必须检查完整历史，不能用最终 ACKNOWLEDGED 代替。
+
+### L6 力矩输出/模式
+
+`HandCommandClient.set_torques(values)` 向 `~/command/torques` 发布六个整数原值，
+顺序取 capability。L6 `0x03` 接受 `0..255`：逐关节的 0 选择位置模式，`1..255`
+选择力矩模式及输出。这些是协议 count，不是已校准 N·m，也不是电流上限。
+
+进入 SDK 后使用共享的有界配置/操作 FIFO，返回位置模式的 0 不能被后续力矩目标覆盖。
+ROS Topic 仍为 best-effort、depth 1，因此 FIFO 不保证每条 DDS 发布都被接纳；已接纳
+命令通过 command status 关联。SDK 在发送前等待 20 ms，发送后任一轴为 0 时等待
+150 ms，否则等待 20 ms，负责模式切换间隔；ROS 不新增另一套定时控制。
+
+合法写回包可能包含之前的输出/模式值，ACK 只确认交换成功，不证明回包等于目标。
+`~/state/torques` 保留真实回包；`torques_hz` 控制 SDK 新鲜回读，也可在 SDK 使用
+`get_torques()` 主动查询，当前没有 ROS `~/get_torques` 服务。L6 状态保留
+`raw_unit="count"`、`device_measured=false`、`device_queried=true` 和
+`ORIGIN_DEVICE_CONFIG_RESPONSE`；`device_queried` 表示通道可查询，单次样本来源看
+`meta.origin`。回读反映输出/模式原值，不能称为实测物理力矩。电流上限 `0x02` 与
+实时电流 `0x36` 继续使用各自独立通道。
 
 ## 角度状态
 
@@ -297,8 +316,9 @@ O30 的实时电流与转矩分别使用
 | O20 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits` |
 | O30 | `torques_limits` / `set_torques_limits()` | `torques_limits` / `get_torques_limits` |
 
-O30 `0x04` 现有电流接口保留，与 `0x06` 转矩对象独立；当前各型号均未声明
-`set_torques()` 命令，转矩限制设置不代表开放实时转矩目标控制。
+O30 `0x04` 现有电流接口保留，与 `0x06` 转矩对象独立。L6 已声明上文的
+`set_torques()` 原值输出/模式命令；O30 的转矩限制设置不代表开放该命令，命令与
+状态能力分别判断。
 
 成功响应的 `state` 保留 raw、通道名称、单位、比例说明、可信度及 `meta`。读取回包或
 缓存不会刷新原采集时刻和 sequence；age/stale 按读取时刻计算，因此 `success=true`
