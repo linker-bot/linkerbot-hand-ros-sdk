@@ -207,6 +207,26 @@ force capability 的 `payload_projection` 决定公共发布契约：
 `force_fd`、`force_fds`、`force_px`，类型为 `HandForceField`。
 支持表、单位、缺失值、共享查询和频率参数见[统一触觉字段](force.md)。
 
+### O30 TASHAN_GATHER 单值字段
+
+实测资料中的 descriptor 为 `Fn_F32_1;Ft_F32_1;Fd_U16_1;Px_U32_1`：每个已安装的
+手指传感器返回 14 字节小端数据，四个字段各有一个值。ROS 复用现有 `HandForceField`
+话题发布小写 `fn/ft/fd/px`，每个 present 传感器的 `raw` 长度为 1。Fn/Ft/Px 的零值
+仍是存在的有效采样，不表示缺少传感器；行列 metadata 不能用于把单值强制 reshape 为
+点阵或三维力向量。原 descriptor 与 raw bytes 保留在 `~/state/tactile_sensors`。
+
+同一原生样本中的四个字段共享 sequence、采集时刻、来源、连接代次和
+`query_channel="force"`；分别设置字段频率时使用最高值调度同一个查询。
+descriptor 发现前支持情况未知，确认此布局后 fn/ft/fd/px 支持，fns/fts/fds 缺失。
+该布局没有 FnS，不发布新的 `force_fns` 或 `normal_force_resultant`，也不把 Fn 求和
+或改名生成合力。缺失手指保留身份、`present=false` 和空数组。
+话题已创建或仍保留不代表此布局提供该字段，实际支持情况应读取
+`capabilities.force_fields.support_known/supported` 并检查实际样本。
+
+Fn/Ft 保留设备上报的力单位；Fd/Px 不继承该单位，SDK 未说明时单位仍未知。
+Fd 的 `65535` 按 U16 原值透传，不换算角度、不由 ROS 定义为无效码；特殊值物理含义
+尚未确认，`valid_values` 仅透传 SDK 判定。无需增加消息类型或额外 CAN 查询。
+
 故障解释中的 `supported_flags` 列出当前协议有定义的标志；其他 false 字段不代表
 设备确认正常。L20Lite 保留原字节、未知位以及负载过载、过流、过热、磁编码异常、
 过压/欠压解释，不支持清错。堵转维持输出统一使用 `hold_current` 和

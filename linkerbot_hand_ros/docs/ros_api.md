@@ -184,8 +184,9 @@ until descriptor discovery; `capabilities.force_fields` and
 
 Set `force_<field>_hz` for individual rates. `force_hz` remains shorthand for
 available fn + fns, and cannot combine with positive fn/fns-specific rates.
-O30 fn and fns share one physical query at the maximum requested rate; both
-are returned. Independent models query separately. ROS adds no CAN queries and
+O30 descriptor fields share one physical query at the maximum requested rate;
+each sample contains the fields actually provided by those sensors. Independent
+models query separately. ROS adds no CAN queries and
 never sums matrix values to manufacture resultants. See the
 [complete force guide](zh/force.md). Install the SDK source with unified force
 support until the next package release, and rebuild all ROS message consumers.
@@ -195,6 +196,35 @@ reshaping fields. Actual byte ranges and element counts come from the descriptor
 Selector, availability, position mode and rectangle-fill flag are preserved.
 An absent sensor has empty fields/bytes, not fabricated zero measurements. FnS is
 not recomputed by summing matrix cells and is not converted to newtons.
+
+### O30 TASHAN_GATHER scalar fields
+
+For the observed descriptor `Fn_F32_1;Ft_F32_1;Fd_U16_1;Px_U32_1`, each available
+fingertip supplies one value per field in a 14-byte little-endian stream. ROS
+publishes lowercase `fn/ft/fd/px` through the existing `HandForceField` topics;
+each present sensor has one `raw` value. Zero Fn, Ft or Px remains a present
+sample, not an absent sensor. Preserve descriptor metadata and raw bytes on
+`~/state/tactile_sensors`; row/column metadata does not turn these fields into
+matrices or three-dimensional force vectors.
+
+All four fields from the same native sample share sequence, collection time,
+origin and connection generation, with `query_channel="force"`. For example,
+`force_fn_hz=10`, `force_ft_hz=20`, `force_fd_hz=15`, `force_px_hz=5` request one
+20 Hz query, not 50 Hz. Support is unknown before descriptor discovery; after
+this layout is observed, fn/ft/fd/px are supported and fns/fts/fds are absent.
+Use the verified field capabilities rather than assuming every O30 sensor has
+the same layout.
+
+This descriptor provides no FnS, so it publishes no new `force_fns` sample or
+`normal_force_resultant`; ROS does not sum or reinterpret Fn to manufacture one.
+An advertised topic alone does not establish field support; check
+`capabilities.force_fields.support_known/supported` and the actual samples.
+An absent fingertip keeps its identity with `present=false` and empty arrays.
+Fn/Ft retain the device-reported force unit. Fd/Px do not inherit that unit;
+their unit remains unknown unless the SDK provides one. Fd `65535` is preserved
+as raw U16 without angle conversion or a ROS-defined invalid-value rule. Its
+physical meaning is unconfirmed; `valid_values` only carries the SDK's judgement.
+No new message schema or separate CAN query is required.
 
 Device info and identity capabilities include adapter/control/bootloader versions,
 protocol name/version, supply range, MCU UID, build time, supported interfaces and

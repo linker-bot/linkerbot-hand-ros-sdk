@@ -11,6 +11,12 @@ section.
 Unreleased
 ----------
 
+* Document O30 TASHAN_GATHER scalar Fn/Ft/Fd/Px through the existing
+  ``HandForceField`` and descriptor views. Add production-descriptor decoding,
+  ROS serialization and publication regressions for shared sample metadata,
+  zero and missing values, layout changes and raw Fd 65535 preservation;
+  never manufacture FnS/resultants or infer direction/proximity units.
+
 * Correct O6 current-limit documentation to describe the complete write-response
   cache separately from live current polling. Extend shared ROS/real-SDK tests
   for no-I/O cache reads, failed writes, differing reply values, unchanged

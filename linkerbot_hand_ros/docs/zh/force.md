@@ -33,9 +33,27 @@ O30 不会仅凭协议名称声明所有字段已安装。查询 descriptor 前
 - `unit`、`encoding`：原始单位及编码，空字符串为未知；`scale_note` 说明比例和争议。
 
 每个字段有独立 `meta` 和 `query_channel`。L20Lite fn 和 fns 来自不同查询，时间戳
-可以不同，不能当作同一时刻的数据。O30 fn/fns 共享一次原生读取，元数据相同。
+可以不同，不能当作同一时刻的数据。O30 同一次原生读取中实际存在的字段共享元数据；
+带 FnS 的布局可同时取得 fn/fns，TASHAN_GATHER 则返回 fn/ft/fd/px。
 矩阵行列及 descriptor 详细布局仍分别从 `state/tactile`、
 `state/tactile_sensors` 取得，不能只凭数组长度猜测二维形状。
+
+## O30 TASHAN_GATHER
+
+已观察到的 descriptor 为 `Fn_F32_1;Ft_F32_1;Fd_U16_1;Px_U32_1`，每指 14 字节
+小端数据，四个字段各为单值。通过 `state/force_fn`、`force_ft`、`force_fd`、
+`force_px` 读取，每个 present 传感器的 `raw` 长度为 1。单位与编码来自实际样本：
+Fn/Ft 保留设备上报的力单位，Fd/Px 单位未确认时为空，不根据力单位推断。
+
+零 Fn/Ft/Px 保留为存在的采样值；缺失手指才使用 `present=false` 和空数组。
+原生 descriptor 及字节流仍可在 `state/tactile_sensors` 中查看，最大或请求行列为 0
+不表示缺少传感器，是否安装以实际 metadata 为准。Fd `65535` 原值保留，既不换算
+角度，也不由 ROS 解释成无效码；其特殊含义未确认，值的有效性只透传 SDK 的判定。
+
+此布局没有 FnS，不发布新的 `force_fns` 和 `normal_force_resultant`；不能把 Fn
+求和、改名或套用旧点阵结果生成合力。各字段共享同次采样的 sequence、采集时间和
+连接代次。传感器布局切换后按更新的 capability 判断支持字段，不沿用旧布局的数据。
+话题仍存在不表示字段受支持，应同时检查 `support_known/supported` 和实际样本。
 
 ## 轮询频率
 
@@ -57,8 +75,10 @@ L6 查询 fn，L20Lite 独立查询 fn 和 fns，O30 一次完整原生查询返
 中的字段。不能同时设置正的 `force_hz` 与正的 `force_fn_hz/force_fns_hz`；
 切换方式时用原子参数更新同时清零旧值。
 
-O30 的 `force_fn_hz=20, force_fns_hz=10` 只产生最高 20 Hz 的同一查询，两字段都会
-随之更新；不会产生 30 Hz 查询。其他独立物理查询各自调度。
+具有 FnS 的 O30 布局中，`force_fn_hz=20, force_fns_hz=10` 只产生最高 20 Hz 的同一
+查询。TASHAN_GATHER 使用 `force_fn_hz=10, force_ft_hz=20, force_fd_hz=15,
+force_px_hz=5` 时也只产生最高 20 Hz 的同一查询，而非 50 Hz；返回实际 descriptor
+中存在的字段，显式设置不支持字段的正频率会被拒绝。其他独立物理查询各自调度。
 频率是请求目标，仍受 CAN 带宽及事务耗时限制。
 
 `publish_rate_hz` 限制 ROS 缓存发布，采集时应至少达到所需最高字段频率，或设为 0
