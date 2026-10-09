@@ -308,9 +308,30 @@ Read `~/capabilities.telemetry` to select the supported endpoint and its
 
 | `read_mode` | Getter behavior | Current examples |
 | --- | --- | --- |
-| `query` | Request a post-call fresh device sample | O6 configured speeds/accelerations/current limits; O30 motion times |
-| `command_response` | Return the last valid device write response, without a new query | L6 configured speeds; L20Lite configured speeds/current limits |
+| `query` | Request a post-call fresh device sample | O6 configured speeds/accelerations; O30 motion times |
+| `command_response` | Return the last valid device write response, without a new query | O6 current limits; L6 configured speeds; L20Lite configured speeds/current limits |
 | `command_cache` | Return the last valid locally dispatched command sample, without device confirmation or a new query | L30 configured speeds/current limits |
+
+O6 `current_hz` polls live current on `~/state/currents`. The SDK interprets a
+`0x02` query reply as measured current (`device_measured=true`,
+`device_queried=true`, `ORIGIN_DEVICE_RESPONSE`), not as current-limit readback.
+An acknowledged `~/command/current_limits` write instead retains the complete
+device reply on `~/state/current_limits`; the reported values can differ from
+the target. This setting sample has `ORIGIN_DEVICE_CONFIG_RESPONSE`,
+`device_measured=false` and `device_queried=false`.
+
+O6 `~/get_current_limits` reads that `command_response` cache without sending a
+query or a write. Before a complete valid write reply exists, including after a
+failed write or SDK recovery to a new connection generation, it returns
+`unsupported_operation` with invalid state. Cache reads retain the original
+sequence and collection time; `success=true` does not imply fresh data and
+the returned sample may be stale. Live-current reads and polling do not populate
+or replace the limit cache, and limit writes do not replace measured current.
+If a later write fails in the same connection generation, the previous valid
+echo remains readable with its original metadata; it does not confirm the failed
+target. Recovery invalidates that cache until a new complete write reply arrives.
+Use Hand SDK source with O6 current/limit isolation. Both channels retain raw
+counts and the SDK's conflicting scale notes; ROS does not convert them to mA.
 
 L20/L20Lite publish live current on `~/state/currents`, polled with `current_hz`,
 and retain `device_measured=true`. L20 has no current-limit readback service.

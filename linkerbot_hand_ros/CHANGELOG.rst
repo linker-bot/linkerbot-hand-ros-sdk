@@ -11,6 +11,12 @@ section.
 Unreleased
 ----------
 
+* Correct O6 current-limit documentation to describe the complete write-response
+  cache separately from live current polling. Extend shared ROS/real-SDK tests
+  for no-I/O cache reads, failed writes, differing reply values, unchanged
+  sample times, independent current/limit state, and cache invalidation on
+  recovery. Requires Hand SDK source with O6 current/limit isolation.
+
 * Align L6 torque tests and API documentation with the Hand SDK source:
   ``command/torques`` accepts raw output/mode counts, ``state/torques`` is
   capability-driven, and accepted mode writes use FIFO rather than latest-wins.

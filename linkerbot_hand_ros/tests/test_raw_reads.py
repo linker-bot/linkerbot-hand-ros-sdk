@@ -41,7 +41,7 @@ from linkerbot_hand_msgs.msg import (
     HandTelemetry,
     SampleMetadata,
 )
-from linkerbot_hand_msgs.srv import GetRawValues
+from linkerbot_hand_msgs.srv import GetRawValues, Recover
 
 _CHANNELS = (
     TelemetrySemantic.CONFIGURED_SPEEDS,
@@ -311,6 +311,12 @@ def test_declared_raw_services_query_fresh_samples_over_dds(rig):
             SampleMetadata.ORIGIN_DEVICE_CONFIG_RESPONSE,
         ),
         (
+            "O6",
+            TelemetrySemantic.CURRENT_LIMITS,
+            "set_current_limits",
+            SampleMetadata.ORIGIN_DEVICE_CONFIG_RESPONSE,
+        ),
+        (
             "L30",
             TelemetrySemantic.CONFIGURED_SPEEDS,
             "set_speeds",
@@ -373,10 +379,10 @@ def test_command_derived_reads_preserve_cache_without_device_io(
     assert len(rig.peer.sent) == before
 
 
-@pytest.mark.parametrize("rig", ["L20", "L20Lite"], indirect=True)
-def test_l20_family_live_current_polling_is_separate_from_configuration(rig):
+@pytest.mark.parametrize("rig", ["O6", "L20", "L20Lite"], indirect=True)
+def test_live_current_polling_is_separate_from_configuration(rig):
     device = rig.driver._require_device()
-    has_echo_cache = device.get_capabilities().model == "L20Lite"
+    has_echo_cache = device.get_capabilities().model in {"O6", "L20Lite"}
     services = {
         rig.driver.resolve_service_name(service.srv_name)
         for service in rig.driver._interfaces.management._services
@@ -414,17 +420,34 @@ def test_l20_family_live_current_polling_is_separate_from_configuration(rig):
         rig.consumer.destroy_subscription(subscription)
 
 
-_L20LITE_FEEDBACK_CASES = (
-    (CommandSemantic.SPEEDS, TelemetrySemantic.CONFIGURED_SPEEDS, "get_speeds"),
-    (CommandSemantic.CURRENT_LIMITS, TelemetrySemantic.CURRENT_LIMITS, "get_currents"),
+_WRITE_RESPONSE_CASES = (
+    (
+        "L20Lite",
+        CommandSemantic.SPEEDS,
+        TelemetrySemantic.CONFIGURED_SPEEDS,
+        "get_speeds",
+    ),
+    (
+        "L20Lite",
+        CommandSemantic.CURRENT_LIMITS,
+        TelemetrySemantic.CURRENT_LIMITS,
+        "get_currents",
+    ),
+    (
+        "O6",
+        CommandSemantic.CURRENT_LIMITS,
+        TelemetrySemantic.CURRENT_LIMITS,
+        "get_currents",
+    ),
 )
 
 
-@pytest.mark.parametrize("rig", ["L20Lite"], indirect=True)
 @pytest.mark.parametrize(
-    "command_semantic,feedback_semantic,live_getter", _L20LITE_FEEDBACK_CASES
+    "rig,command_semantic,feedback_semantic,live_getter",
+    _WRITE_RESPONSE_CASES,
+    indirect=["rig"],
 )
-def test_l20lite_echo_topics_and_services_do_not_replace_live_measurements(
+def test_echo_topics_and_services_do_not_replace_live_measurements(
     rig, command_semantic, feedback_semantic, live_getter
 ):
     device = rig.driver._require_device()
@@ -507,17 +530,22 @@ def test_l20lite_echo_topics_and_services_do_not_replace_live_measurements(
             getattr(device.get_snapshot(), feedback_semantic.value).raw
             == (190,) * count
         )
+        assert (
+            getattr(device.get_snapshot(), feedback_semantic.value).meta.collected_at
+            == cached.meta.collected_at
+        )
     finally:
         rig.consumer.destroy_publisher(publisher)
         rig.consumer.destroy_subscription(state_subscription)
         rig.consumer.destroy_subscription(status_subscription)
 
 
-@pytest.mark.parametrize("rig", ["L20Lite"], indirect=True)
 @pytest.mark.parametrize(
-    "command_semantic,feedback_semantic,live_getter", _L20LITE_FEEDBACK_CASES
+    "rig,command_semantic,feedback_semantic,live_getter",
+    _WRITE_RESPONSE_CASES,
+    indirect=["rig"],
 )
-def test_l20lite_failed_echo_keeps_cache_service_unavailable_without_querying(
+def test_failed_echo_keeps_cache_service_unavailable_without_querying(
     rig, command_semantic, feedback_semantic, live_getter
 ):
     device = rig.driver._require_device()
@@ -538,6 +566,112 @@ def test_l20lite_failed_echo_keeps_cache_service_unavailable_without_querying(
     assert getattr(device, live_getter)(timeout=1).raw == (11,) * len(
         capability.channels
     )
+
+
+@pytest.mark.parametrize("rig", ["O6"], indirect=True)
+def test_o6_failed_limit_write_preserves_the_last_complete_echo(rig):
+    device = rig.driver._require_device()
+    rig.peer.echo_value = 190
+    handle = device.set_current_limits([200] * 6)
+    assert handle.wait(1) is CommandStage.ACKNOWLEDGED
+    cached = device.get_snapshot().current_limits
+    rig.peer.drop_writes = True
+    failed = device.set_current_limits([210] * 6)
+    assert failed.wait(1) is CommandStage.FAILED
+    assert failed.error.code is ErrorCode.TIMEOUT
+
+    before = len(rig.peer.sent)
+    response = rig.call(TelemetrySemantic.CURRENT_LIMITS)
+    assert response.success
+    assert list(response.state.raw) == [190] * 6
+    assert response.state.meta.sequence == cached.meta.sequence
+    assert (
+        response.state.meta.connection_generation == cached.meta.connection_generation
+    )
+    assert response.state.meta.origin == SampleMetadata.ORIGIN_DEVICE_CONFIG_RESPONSE
+    assert (
+        device.get_snapshot().current_limits.meta.collected_at
+        == cached.meta.collected_at
+    )
+    assert len(rig.peer.sent) == before
+
+
+@pytest.mark.parametrize("rig", ["O6"], indirect=True)
+def test_o6_recovery_invalidates_limit_cache_until_a_new_write_echo(rig):
+    device = rig.driver._require_device()
+    rig.peer.echo_value = 190
+    handle = device.set_current_limits([200] * 6)
+    assert handle.wait(1) is CommandStage.ACKNOWLEDGED
+    old = device.get_snapshot().current_limits
+    assert old.meta.valid and old.raw == (190,) * 6
+
+    states = []
+    subscription = rig.consumer.create_subscription(
+        HandTelemetry, "/linkerbot_hand/state/current_limits", states.append, STATE_QOS
+    )
+    recovery = rig.consumer.create_client(Recover, "/linkerbot_hand/recover")
+    try:
+        rig.spin_until(
+            lambda: subscription.get_publisher_count() and recovery.service_is_ready()
+        )
+        future = recovery.call_async(Recover.Request(timeout_s=1.0))
+        rig.spin_until(future.done)
+        assert future.result().success, future.result().message
+        snapshot = device.get_snapshot()
+        generation = snapshot.connection_generation
+        assert generation > old.meta.connection_generation
+        assert snapshot.current_limits is not None
+        assert not snapshot.current_limits.meta.valid
+        assert snapshot.current_limits.meta.connection_generation == generation
+        before = len(rig.peer.sent)
+        missing = rig.call(TelemetrySemantic.CURRENT_LIMITS)
+        assert not missing.success
+        assert missing.error_code == ErrorCode.UNSUPPORTED_OPERATION.value
+        assert not missing.state.meta.valid
+        assert len(rig.peer.sent) == before
+
+        # Live current can refresh without making the new limit cache valid.
+        rig.peer.value = 12
+        measured = device.get_currents(timeout=1)
+        assert measured.raw == (12,) * 6
+        assert measured.meta.connection_generation == generation
+        assert not device.get_snapshot().current_limits.meta.valid
+        rig.spin_until(
+            lambda: any(
+                s.meta.connection_generation == generation and not s.meta.valid
+                for s in states
+            )
+        )
+        assert not any(
+            s.meta.connection_generation == generation and s.meta.valid for s in states
+        )
+
+        rig.peer.echo_value = 180
+        handle = device.set_current_limits([200] * 6)
+        assert handle.wait(1) is CommandStage.ACKNOWLEDGED
+        response = rig.call(TelemetrySemantic.CURRENT_LIMITS)
+        assert response.success
+        assert list(response.state.raw) == [180] * 6
+        assert response.state.meta.connection_generation == generation
+        assert (
+            response.state.meta.origin == SampleMetadata.ORIGIN_DEVICE_CONFIG_RESPONSE
+        )
+        assert not response.state.device_measured and not response.state.device_queried
+        rig.spin_until(
+            lambda: any(
+                s.meta.connection_generation == generation
+                and s.meta.valid
+                and list(s.raw) == [180] * 6
+                for s in states
+            )
+        )
+        unchanged = device.get_snapshot().currents
+        assert unchanged.raw == measured.raw
+        assert unchanged.meta.sequence == measured.meta.sequence
+        assert unchanged.meta.collected_at == measured.meta.collected_at
+    finally:
+        rig.consumer.destroy_client(recovery)
+        rig.consumer.destroy_subscription(subscription)
 
 
 @pytest.mark.parametrize("timeout", [0.0, -1.0, float("nan"), float("inf"), 1.9])

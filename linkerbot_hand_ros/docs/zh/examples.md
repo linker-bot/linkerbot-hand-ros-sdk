@@ -78,8 +78,10 @@ O6 的该服务会主动查询配置速度，L6/L20Lite 返回最近一次有效
 
 同一服务类型还用于 `get_configured_accelerations`、`get_current_limits`、
 `get_torques_limits`、`get_motion_times` 和 `get_limit_compensations`，可用性以 capability
-为准。L20/L20Lite 使用 `current_hz` 和 `~/state/currents` 获取实时电流；L20 没有限制回读服务。
-L20Lite 的 `get_current_limits` 读取完整写回包缓存，不查询实时电流，依赖支持该能力的新 SDK 源码。
+为准。O6/L20/L20Lite 使用 `current_hz` 和 `~/state/currents` 获取实时电流；L20 没有限制回读服务。
+O6/L20Lite 的 `get_current_limits` 读取有效完整写回包缓存，不发查询，依赖支持该能力的
+Hand SDK 源码。O6 尚无有效写回包或恢复到新代次后尚未重新写入时，读取失败；缓存读取
+保留原采集时刻，回包值允许不同于写入目标，实时电流与限制状态不会相互覆盖。
 O30 `get_torques_limits` 读取独立的转矩限制。主动查询的样本也会经正常
 状态发布流程送到对应 `~/state/<semantic>`；仅订阅话题不会查询，也不会自动开启轮询。
 

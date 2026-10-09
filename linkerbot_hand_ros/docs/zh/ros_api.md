@@ -288,9 +288,25 @@ current=`C7`。ROS 只收发 raw；当前资料给出的解释分别为 `1000/25
 
 | `read_mode` | 调用行为 | 当前示例 |
 | --- | --- | --- |
-| `query` | 请求调用之后的新设备样本 | O6 配置速度/加速度/电流上限；O30 运动时间 |
-| `command_response` | 返回最近一次有效的设备写入回包，不发新查询 | L6 配置速度；L20Lite 配置速度/电流上限 |
+| `query` | 请求调用之后的新设备样本 | O6 配置速度/加速度；O30 运动时间 |
+| `command_response` | 返回最近一次有效的设备写入回包，不发新查询 | O6 电流上限；L6 配置速度；L20Lite 配置速度/电流上限 |
 | `command_cache` | 返回最近一次有效的本地已发送命令缓存，不表示设备已确认，不发新查询 | L30 配置速度/电流上限 |
+
+O6 的 `current_hz` 轮询实时电流并发布到 `~/state/currents`。SDK 将 `0x02` 查询
+回复解释为实测电流，保留 `device_measured=true`、`device_queried=true` 和
+`ORIGIN_DEVICE_RESPONSE`，不能把它当作电流上限回读。
+`~/command/current_limits` 收到有效完整写回包后确认命令，并把设备实际回值保留在
+`~/state/current_limits`；回值允许不同于目标。该配置样本使用
+`ORIGIN_DEVICE_CONFIG_RESPONSE`，`device_measured=false`、`device_queried=false`。
+
+O6 的 `~/get_current_limits` 按 `command_response` 读取这个缓存，不发查询或写命令。
+尚无有效完整写回包、写入失败后仍无有效回包，或 SDK 恢复到新连接代次后尚未重新写入时，
+返回 `unsupported_operation` 和无效状态。读取缓存保留原 sequence 与采集时刻；
+`success=true` 不保证新鲜，仍须检查 age/stale。实时电流查询/轮询不会填充或覆盖限制
+缓存，限制写入也不会覆盖实测电流。同一连接代次内后续写入失败时，已有的有效完整回包
+仍可读取，保留原元数据，但它不证明失败目标已生效；恢复后缓存失效，须等新的完整写回包。
+该行为需要已隔离 O6 电流/限制语义的 Hand SDK
+源码。两个通道仍使用原值 count，保留 SDK 中有冲突的比例说明，ROS 不换算成 mA。
 
 L20/L20Lite 的实时电流由 `current_hz` 轮询并发布到 `~/state/currents`，
 保留 `device_measured=true`；L20 仍没有电流限制回读服务。
