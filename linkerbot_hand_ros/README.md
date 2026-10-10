@@ -121,11 +121,17 @@ ros2 launch linkerbot_hand_ros multi_hand.launch.py
 ```
 
 The installed `config/multi_hand.yaml` example creates
-`/l6_left/linkerbot_hand` and `/o6_right/linkerbot_hand`. Pass
-`config:=/absolute/path/to/hands.yaml` for a deployment-specific file. Hands
-with the same `transport_json` physical key share one transport runtime, RX
-reactor, and TX arbiter. Starting `hand.launch.py` twice creates two processes
-and therefore cannot provide process-local bus arbitration.
+`/l6_left/linkerbot_hand` on `can0` and `/o6_right/linkerbot_hand` on `can1`.
+The maintained topology is one hand per physical CAN/CAN FD channel. Connect
+each hand to its own interface and configure both before autostart. Pass
+`config:=/absolute/path/to/hands.yaml` for your actual wiring.
+
+The container provides group startup and rollback in one process; separate
+channels still use separate transport runtimes. The SDK can share a runtime,
+RX reactor and TX arbiter for equal physical keys, but that resource mechanism
+does not establish support for multiple hands on one channel. ROS namespaces
+do not isolate device traffic. Separate `hand.launch.py` processes do not
+provide the container's group startup/rollback or shared in-memory arbitration.
 
 Inspect the verified metadata and state:
 

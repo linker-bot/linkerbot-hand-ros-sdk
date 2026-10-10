@@ -102,13 +102,14 @@ ros2 launch linkerbot_hand_ros hand.launch.py \
   transport_json:='{"backend":"socketcan","channel":"can0"}'
 ```
 
-L6/O6 等多手部署使用同一进程：
+L6/O6 等多手部署按一通道一只手接线，使用容器统一启停：
 
 ```bash
 ros2 launch linkerbot_hand_ros multi_hand.launch.py
 ```
 
-默认读取随包安装的 `config/multi_hand.yaml`。使用自己的绝对路径：
+默认读取随包安装的 `config/multi_hand.yaml`：L6 左手使用 `can0`，O6 右手使用
+`can1`。启动前分别配置两个接口；其他接线使用自己的绝对路径：
 
 ```bash
 ros2 launch linkerbot_hand_ros multi_hand.launch.py \
@@ -116,8 +117,9 @@ ros2 launch linkerbot_hand_ros multi_hand.launch.py \
 ```
 
 参数文件中的 `device_namespaces` 决定内部 Lifecycle 节点。每个 namespace 必须有对应的
-`/<namespace>/linkerbot_hand` 参数段。相同物理 `transport_json` 的设备在本进程内共享总线
-runtime；不同 channel 分别建立 runtime。不要用两个独立 launch 进程代替该入口。
+`/<namespace>/linkerbot_hand` 参数段。不同 channel 分别建立 runtime；SDK 对相同物理
+key 的资源共享不代表支持同通道多手，namespace 也不提供设备报文隔离。
+需要容器的组启动和失败回滚时使用该入口；独立 launch 进程不具备这些组生命周期能力。
 
 确认 active、身份已验证且角度属于当前连接代次：
 

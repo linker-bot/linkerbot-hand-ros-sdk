@@ -17,6 +17,7 @@ from linkerbot_hand_ros.multi_device import (
     destroy_hand_nodes,
 )
 from linkerbot_hand_ros.node import LinkerbotHandNode
+from linkerbot_hand_ros.transport_config import SocketCANConfiguration
 from rclpy.lifecycle import TransitionCallbackReturn
 from rclpy.parameter import Parameter
 
@@ -237,9 +238,16 @@ def test_example_parameter_file_targets_each_in_process_driver() -> None:
     rclpy.init(args=["--ros-args", "--params-file", str(config_path)])
     container = MultiHandContainerNode()
     nodes = ()
+    builders: dict[str, DeviceBuilder] = {}
+
+    def factory(*, namespace: str):
+        builder = DeviceBuilder()
+        builders[namespace] = builder
+        return LinkerbotHandNode(device_factory=builder, namespace=namespace)
+
     try:
         configuration = container.read_configuration()
-        nodes = create_hand_nodes(configuration)
+        nodes = create_hand_nodes(configuration, node_factory=factory)
 
         assert [node.get_fully_qualified_name() for node in nodes] == [
             "/l6_left/linkerbot_hand",
@@ -250,9 +258,20 @@ def test_example_parameter_file_targets_each_in_process_driver() -> None:
             "left",
             "right",
         ]
-        assert {node.get_parameter("transport_json").value for node in nodes} == {
-            '{"backend":"socketcan","channel":"can0"}'
-        }
+        for node in nodes:
+            assert node.trigger_configure() == TransitionCallbackReturn.SUCCESS
+        configurations = [builder.calls[0] for builder in builders.values()]
+        assert [value.model for value in configurations] == ["L6", "O6"]
+        assert all(
+            isinstance(value.transport, SocketCANConfiguration)
+            for value in configurations
+        )
+        assert [value.transport.channel for value in configurations] == ["can0", "can1"]
+        assert len({value.transport.channel for value in configurations}) == len(nodes)
+        assert all(value.polling_plan.angles_hz == 100.0 for value in configurations)
+        assert all(
+            builder.runtime_factories[0].calls == 0 for builder in builders.values()
+        )
     finally:
         destroy_hand_nodes(nodes)
         container.destroy_node()

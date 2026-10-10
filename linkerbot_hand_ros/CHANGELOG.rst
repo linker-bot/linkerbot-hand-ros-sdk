@@ -11,6 +11,12 @@ section.
 Unreleased
 ----------
 
+* Correct the bundled multi-hand topology to use L6 left on ``can0`` and O6
+  right on ``can1``, matching the supported one-hand-per-channel setup. Align
+  runtime documentation and exercise namespaced YAML through configure with
+  separate transport descriptors and no device I/O. Distinguish group lifecycle
+  management and SDK resource sharing from same-channel multi-hand support.
+
 * Document O30 TASHAN_GATHER scalar Fn/Ft/Fd/Px through the existing
   ``HandForceField`` and descriptor views. Add production-descriptor decoding,
   ROS serialization and publication regressions for shared sample metadata,

@@ -1,3 +1,5 @@
+# Supported topology: one hand per physical CAN channel.
+# Connect L6 left to can0 and O6 right to can1; configure both interfaces first.
 /linkerbot_hand_container:
   ros__parameters:
     device_namespaces: [l6_left, o6_right]
@@ -16,7 +18,7 @@
   ros__parameters:
     model: o6
     side: right
-    transport_json: '{"backend":"socketcan","channel":"can0"}'
+    transport_json: '{"backend":"socketcan","channel":"can1"}'
     angles_hz: 100.0
     angle_feedback: adaptive
     force_hz: 0.0

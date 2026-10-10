@@ -155,8 +155,10 @@ SDK 禁止重放断线前目标，也不会自动清 fault、enable 或 calibrat
 
 每个设备使用独立 namespace，例如 `/left/linkerbot_hand` 和
 `/right/linkerbot_hand`。使用 `multi_hand.launch.py` 和一个参数文件把这些 Lifecycle 节点
-放入同一进程；不要分别启动 `hand.launch.py`。相同物理 transport key 的节点会共享一个
-runtime、RX reactor 和 TX arbiter；不同 channel 不共享物理 runtime。
+放入同一进程，统一启动和失败回滚。当前维护范围为一条物理 CAN/CAN FD 通道一只手，
+各手使用独立接口；随包示例将 L6 左手接到 `can0`、O6 右手接到 `can1`。
+相同物理 key 的 SDK 资源共享机制不代表支持同通道多手，namespace 也不能隔离总线报文；
+不同 channel 使用独立 transport runtime。独立 `hand.launch.py` 进程不提供组生命周期管理。
 
 容器自动启动采用全量 configure 后全量 activate，任何失败都会逆序回滚，业务不会看到容器
 留下部分 active 设备。具体参数文件见[Lifecycle 与参数配置](configuration.md#多设备)。

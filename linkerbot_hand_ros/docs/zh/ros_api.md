@@ -6,6 +6,9 @@
 多设备入口会在同一进程中创建多个 `/namespace/linkerbot_hand`，每个节点的 Topic、Service
 和 Lifecycle 名称都位于自己的 namespace。相同物理 transport key 只在这个进程内共享
 runtime 和总线仲裁；独立进程不共享。
+当前维护范围为一条物理 CAN/CAN FD 通道一只手，随包示例中 L6 左手使用 `can0`、
+O6 右手使用 `can1`。共享 runtime 是资源机制，不代表支持同通道多手；namespace
+只区分 ROS 实体，不隔离设备报文。
 
 ## 元数据
 

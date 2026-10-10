@@ -118,17 +118,21 @@ ros2 launch linkerbot_hand_ros hand.launch.py \
   transport_json:='{"backend":"socketcan","channel":"can0"}'
 ```
 
-多手设备必须使用同进程入口：
+多手容器可在同一进程统一管理多个设备：
 
 ```bash
 ros2 launch linkerbot_hand_ros multi_hand.launch.py
 ```
 
-随包安装的 `config/multi_hand.yaml` 会创建 `/l6_left/linkerbot_hand` 和
-`/o6_right/linkerbot_hand`。正式部署通过
-`config:=/absolute/path/to/hands.yaml` 指定自己的参数文件。只有
-`transport_json` 产生相同物理 key 的设备才共享一个 transport runtime、RX reactor 和 TX
-arbiter；启动两次 `hand.launch.py` 会产生两个进程，不能提供进程内总线仲裁。
+随包安装的 `config/multi_hand.yaml` 将 `/l6_left/linkerbot_hand` 连接到 `can0`，
+将 `/o6_right/linkerbot_hand` 连接到 `can1`。当前维护范围为一条物理 CAN/CAN FD
+通道一只手；启动前分别接线并配置两个接口。正式部署通过
+`config:=/absolute/path/to/hands.yaml` 指定符合实际接线的参数文件。
+
+容器提供统一启停和失败回滚，不同通道仍使用各自独立的 transport runtime。
+相同物理 key 的 SDK 资源可共享 RX reactor 和 TX arbiter，但这一机制不代表支持
+同通道多手；ROS namespace 也不能隔离设备报文。独立 `hand.launch.py` 进程不提供
+该容器的组启动/回滚或跨进程共享仲裁。
 
 launch 默认 `autostart:=true`。检查 verified capability、设备信息和角度：
 

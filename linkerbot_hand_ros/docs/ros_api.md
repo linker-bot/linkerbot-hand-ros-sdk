@@ -99,6 +99,10 @@ parameters are `device_namespaces` and `autostart`. With
 autostart enabled, all nodes configure before any node activates; a failure
 rolls the group back in reverse order. Identical physical transport keys share
 one process-local runtime. Separate driver processes cannot share that arbiter.
+The maintained hand topology is one hand per physical CAN/CAN FD channel;
+the bundled example uses `can0` for L6 left and `can1` for O6 right. Runtime
+sharing is a resource mechanism, not support for connecting multiple hands to
+one channel. Namespaces distinguish ROS entities, not device traffic.
 
 ## Command Topics
 

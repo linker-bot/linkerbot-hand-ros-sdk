@@ -160,8 +160,10 @@ Linux SocketCAN，classic CAN 和 CAN FD 均由 capability 决定：
 
 ## 多设备
 
-同一总线上的多只手必须使用 `multi_hand.launch.py`，在一个 Python 进程中运行多个
-Lifecycle 节点。参数文件结构如下：
+当前维护范围为一条物理 CAN/CAN FD 通道一只手，多只手使用不同接口。
+`multi_hand.launch.py` 在一个 Python 进程中统一管理多个 Lifecycle 节点及失败回滚；
+同进程管理不意味着多个设备共用同一通道。示例接线为 L6 左手接 `can0`、O6 右手接
+`can1`，启动前分别配置两个接口。参数文件结构如下：
 
 ```yaml
 /linkerbot_hand_container:
@@ -180,7 +182,7 @@ Lifecycle 节点。参数文件结构如下：
   ros__parameters:
     model: o6
     side: right
-    transport_json: '{"backend":"socketcan","channel":"can0"}'
+    transport_json: '{"backend":"socketcan","channel":"can1"}'
     angles_hz: 100.0
 ```
 
@@ -208,7 +210,8 @@ ros2 lifecycle set /l6_left/linkerbot_hand activate
 
 两只手的 `transport_json` 物理 key 相同时，`linkerbot-transport` 才共享一个 runtime、RX
 reactor 和 TX arbiter。不同 channel 仍位于同一 ROS 进程，但各自拥有独立 transport
-runtime。两个 `hand.launch.py` 进程无法共享内存仲裁器，不能作为同总线生产部署方式。
+runtime；共享机制不能作为同通道多手的支持承诺，namespace 也不能隔离总线报文。
+独立 `hand.launch.py` 进程没有容器的组启动/回滚，也不能共享进程内仲裁器。
 
 ## 恢复
 
