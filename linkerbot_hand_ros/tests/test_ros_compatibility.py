@@ -102,7 +102,9 @@ def test_launch_exposes_every_driver_parameter() -> None:
 
 
 def test_launch_uses_jazzy_lifecycle_node_with_autostart() -> None:
-    source = (PACKAGE_ROOT / "launch/hand.launch.py").read_text(encoding="utf-8")
+    source = (PACKAGE_ROOT / "linkerbot_hand_ros/discovery_launch.py").read_text(
+        encoding="utf-8"
+    )
     tree = ast.parse(source)
     lifecycle_nodes = [
         node
@@ -117,11 +119,18 @@ def test_launch_uses_jazzy_lifecycle_node_with_autostart() -> None:
 
 
 def test_multi_hand_launch_preserves_each_internal_node_name() -> None:
-    source = (PACKAGE_ROOT / "launch/multi_hand.launch.py").read_text(encoding="utf-8")
+    source = (PACKAGE_ROOT / "linkerbot_hand_ros/discovery_launch.py").read_text(
+        encoding="utf-8"
+    )
     tree = ast.parse(source)
+    multi_builder = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "build_multi_launch"
+    )
     nodes = [
         node
-        for node in ast.walk(tree)
+        for node in ast.walk(multi_builder)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
         and node.func.id == "Node"
@@ -132,7 +141,11 @@ def test_multi_hand_launch_preserves_each_internal_node_name() -> None:
     assert "name" not in keywords
     assert "namespace" not in keywords
     assert 'executable="hand_container"' in source
-    assert "ParameterFile(config, allow_substs=True)" in source
+    assert "ParameterFile(str(path), allow_substs=True)" in source
+    entrypoint = (PACKAGE_ROOT / "launch/multi_hand.launch.py").read_text(
+        encoding="utf-8"
+    )
+    assert "function=build_multi_launch" in entrypoint
 
 
 def test_ros_callbacks_contain_no_synchronous_device_reads() -> None:
@@ -198,7 +211,19 @@ def test_ros_source_uses_only_the_public_hand_import_path() -> None:
         for path, contents in sources.items()
         if "from linkerbot_transport" in contents
     }
-    assert transport_importers == {"transport_factory.py"}
+    assert transport_importers == {"transport_factory.py", "discovery_config.py"}
+    config_tree = ast.parse(
+        sources[PACKAGE_ROOT / "linkerbot_hand_ros/discovery_config.py"]
+    )
+    imports = [
+        node
+        for node in ast.walk(config_tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module.startswith("linkerbot_transport")
+    ]
+    assert [(node.module, [name.name for name in node.names]) for node in imports] == [
+        ("linkerbot_transport.canfd", ["CANFDConfigOptions"])
+    ]
 
 
 def test_package_declares_direct_runtime_dependencies() -> None:

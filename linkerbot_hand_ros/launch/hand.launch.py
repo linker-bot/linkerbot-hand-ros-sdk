@@ -1,8 +1,6 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import LifecycleNode
-from launch_ros.parameter_descriptions import ParameterValue
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from linkerbot_hand_ros.discovery_launch import build_hand_launch, check_hand_mode
 
 _ARGUMENTS = (
     ("model", "l6", str),
@@ -53,17 +51,26 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("autostart", default_value="true"),
         )
     )
-    parameters = {
-        name: ParameterValue(LaunchConfiguration(name), value_type=value_type)
-        for name, _default, value_type in _ARGUMENTS
-    }
-    node = LifecycleNode(
-        package="linkerbot_hand_ros",
-        executable="hand_node",
-        name="linkerbot_hand",
-        namespace=LaunchConfiguration("namespace"),
-        output="screen",
-        autostart=LaunchConfiguration("autostart"),
-        parameters=[parameters],
+    discovery_arguments = [
+        DeclareLaunchArgument("discover", default_value="false"),
+        DeclareLaunchArgument(
+            "channels",
+            default_value="",
+            description="Comma-separated discovery report interfaces",
+        ),
+        DeclareLaunchArgument(
+            "discovery_config",
+            default_value="",
+            description="Optional SDK discovery settings YAML",
+        ),
+    ]
+    return LaunchDescription(
+        [
+            *discovery_arguments,
+            OpaqueFunction(function=check_hand_mode),
+            *arguments,
+            OpaqueFunction(
+                function=build_hand_launch, kwargs={"arguments": _ARGUMENTS}
+            ),
+        ]
     )
-    return LaunchDescription([*arguments, node])

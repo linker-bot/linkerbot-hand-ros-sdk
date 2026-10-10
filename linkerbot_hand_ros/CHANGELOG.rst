@@ -11,6 +11,17 @@ section.
 Unreleased
 ----------
 
+* Add explicit ``discover:=true`` launch modes: a unique verified single hand,
+  or all verified hands in scope with a concise summary and atomic,
+  no-overwrite ``hands.yaml`` export. Reuse generated deployments through
+  ``config`` with fixed role bindings; retain manual parameter-file startup.
+  Preserve SDK candidate factories, endpoint/FD recipes and scan fingerprints,
+  probe cleanup and group rollback. Add channel filters, advanced discovery
+  settings, YAML schema validation and PyYAML runtime metadata.
+  Isolate internal node identity from process-wide remaps while retaining global
+  ROS settings; save resolved parent-scoped roles once and preserve legacy launch
+  parameter templates before YAML validation.
+
 * Correct the bundled multi-hand topology to use L6 left on ``can0`` and O6
   right on ``can1``, matching the supported one-hand-per-channel setup. Align
   runtime documentation and exercise namespaced YAML through configure with

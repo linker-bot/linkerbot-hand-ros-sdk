@@ -24,6 +24,7 @@ setup(
     ],
     install_requires=[
         "setuptools",
+        "PyYAML>=6",
         "linkerbot-hand>=2.0.0,<3.0.0",
     ],
     extras_require={"test": ["pytest"]},

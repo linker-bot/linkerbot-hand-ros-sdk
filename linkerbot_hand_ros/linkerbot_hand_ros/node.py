@@ -10,7 +10,8 @@ from collections.abc import Callable
 from typing import Any, Protocol
 
 import rclpy
-from linkerbot_hand import HandDevice, HandError
+from linkerbot_hand import HandDevice, HandError, HandSide, ValidationError
+from linkerbot_hand.discovery import DiscoveryCandidate, DiscoveryStatus
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.exceptions import InvalidHandle
 from rclpy.executors import (
@@ -44,15 +45,45 @@ class LinkerbotHandNode(LifecycleNode):
 
     def __init__(
         self,
-        device_factory: DeviceFactory = create_hand_device,
+        device_factory: DeviceFactory | None = None,
+        *,
+        discovery_candidate: DiscoveryCandidate | None = None,
         **kwargs: Any,
     ) -> None:
+        if discovery_candidate is not None and (
+            not isinstance(discovery_candidate, DiscoveryCandidate)
+            or discovery_candidate.status is not DiscoveryStatus.VERIFIED
+        ):
+            raise ValidationError("ROS discovery requires a verified SDK candidate")
         super().__init__("linkerbot_hand", **kwargs)
         self._parameter_lock = threading.RLock()
         self._parameter_update_in_progress = False
         self._parameter_fault: str | None = None
-        declare_driver_parameters(self)
-        self._device_factory = device_factory
+        self._discovered_capabilities = (
+            None if discovery_candidate is None else discovery_candidate.capabilities
+        )
+        identity_defaults = {}
+        if discovery_candidate is not None:
+            identity_defaults = {
+                "model": discovery_candidate.model,
+                "side": (
+                    ""
+                    if discovery_candidate.side is HandSide.NOT_APPLICABLE
+                    else discovery_candidate.side.value
+                ),
+                "transport_json": "",
+            }
+        declare_driver_parameters(self, defaults=identity_defaults)
+        if device_factory is not None:
+            self._device_factory = device_factory
+        elif discovery_candidate is not None:
+            self._device_factory = lambda configuration: (
+                discovery_candidate.create_hand_device(
+                    config=configuration.device_config
+                )
+            )
+        else:
+            self._device_factory = create_hand_device
         self._configuration: DriverConfiguration | None = None
         self._device: HandDevice | None = None
         self._interfaces: DriverInterfaces | None = None
@@ -68,7 +99,8 @@ class LinkerbotHandNode(LifecycleNode):
 
         try:
             configuration = read_driver_configuration(
-                lambda name: self.get_parameter(name).value
+                lambda name: self.get_parameter(name).value,
+                discovered_capabilities=self._discovered_capabilities,
             )
             self._configuration = configuration
             self._device = self._device_factory(configuration)
@@ -214,6 +246,7 @@ class LinkerbotHandNode(LifecycleNode):
             self._configuration,
             read_parameter=lambda name: self.get_parameter(name).value,
             error_text=self._error_text,
+            discovered_capabilities=self._discovered_capabilities,
         )
         if not prepared.result.successful or prepared.configuration is None:
             return prepared.result
@@ -296,7 +329,8 @@ class LinkerbotHandNode(LifecycleNode):
             if not result.successful or previous is None:
                 return result
             updated = read_driver_configuration(
-                lambda name: self.get_parameter(name).value
+                lambda name: self.get_parameter(name).value,
+                discovered_capabilities=self._discovered_capabilities,
             )
             if updated != previous:
                 runtime_attempted = True
@@ -362,7 +396,8 @@ class LinkerbotHandNode(LifecycleNode):
         if self._configuration is not None:
             try:
                 self._configuration = read_driver_configuration(
-                    lambda name: self.get_parameter(name).value
+                    lambda name: self.get_parameter(name).value,
+                    discovered_capabilities=self._discovered_capabilities,
                 )
             except Exception as error:
                 self.get_logger().error(

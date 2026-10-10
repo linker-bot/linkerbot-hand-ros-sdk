@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
+from linkerbot_hand import DeviceCapabilities
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.lifecycle import LifecycleNode
 from rclpy.parameter import Parameter
@@ -63,11 +64,13 @@ class ParameterUpdate:
     configuration: DriverConfiguration | None = None
 
 
-def declare_driver_parameters(node: LifecycleNode) -> None:
+def declare_driver_parameters(
+    node: LifecycleNode, *, defaults: Mapping[str, object] | None = None
+) -> None:
     """Declare the complete HandDevice 1.0 parameter surface."""
 
     for name, value in PARAMETER_DEFAULTS.items():
-        node.declare_parameter(name, value)
+        node.declare_parameter(name, (defaults or {}).get(name, value))
 
 
 def prepare_parameter_update(
@@ -76,6 +79,7 @@ def prepare_parameter_update(
     *,
     read_parameter: Callable[[str], object],
     error_text: Callable[[BaseException], str],
+    discovered_capabilities: DeviceCapabilities | None = None,
 ) -> ParameterUpdate:
     """Validate a proposed atomic update without applying runtime effects."""
 
@@ -96,7 +100,8 @@ def prepare_parameter_update(
     if configuration is None and proposed:
         try:
             read_driver_configuration(
-                lambda name: proposed.get(name, read_parameter(name))
+                lambda name: proposed.get(name, read_parameter(name)),
+                discovered_capabilities=discovered_capabilities,
             )
         except Exception as error:  # noqa: BLE001 - parameter boundary
             return ParameterUpdate(

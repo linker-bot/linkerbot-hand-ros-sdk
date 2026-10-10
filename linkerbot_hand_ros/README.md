@@ -98,6 +98,24 @@ program entry points without opening a device or sending a CAN frame.
 
 ## Run
 
+Automatic single-hand startup accepts one unique verified hand:
+
+```bash
+ros2 launch linkerbot_hand_ros hand.launch.py discover:=true
+```
+
+Automatic multi-hand startup prints a summary, saves `./hands.yaml` without
+overwriting, and activates all verified hands in scope. Reuse the saved file:
+
+```bash
+ros2 launch linkerbot_hand_ros multi_hand.launch.py discover:=true
+ros2 launch linkerbot_hand_ros multi_hand.launch.py config:=./hands.yaml
+```
+
+Use `channels:=can0` to limit discovery and `output:=./hands-lab.yaml` to choose
+a new multi-hand output. See [automatic discovery](docs/discovery.md) for
+selection, fixed roles, lifecycle and advanced settings. Manual startup follows.
+
 Start a left L6 on `can0`:
 
 ```bash

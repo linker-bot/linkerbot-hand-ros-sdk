@@ -1,5 +1,9 @@
 # Lifecycle 与参数配置
 
+启动可选择手工参数、单手 `discover:=true`、多手发现及生成文件复用。
+扫描发生在启动准备阶段，configure 仍保持零设备 I/O；详见
+[自动发现指南](discovery.md)。新发现型 YAML 与下面的旧 ROS 参数 YAML 均受支持。
+
 ## Lifecycle 行为
 
 | 状态转换 | 行为 |

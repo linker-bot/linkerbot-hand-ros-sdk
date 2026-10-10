@@ -102,6 +102,24 @@ ros2 pkg executables linkerbot_hand_ros
 
 ## 启动
 
+单手自动发现，只接受唯一已验证目标：
+
+```bash
+ros2 launch linkerbot_hand_ros hand.launch.py discover:=true
+```
+
+多手自动发现打印摘要、保存 `./hands.yaml`，再对范围内全部已验证设备组激活。
+后续直接加载生成文件：
+
+```bash
+ros2 launch linkerbot_hand_ros multi_hand.launch.py discover:=true
+ros2 launch linkerbot_hand_ros multi_hand.launch.py config:=./hands.yaml
+```
+
+`channels:=can0` 限定接口，`output:=./hands-lab.yaml` 指定新输出，已有文件不覆盖。
+固定角色、生命周期及高级设置见[自动发现指南](docs/zh/discovery.md)。
+原有手工启动方式如下。
+
 L6 左手、SocketCAN `can0`：
 
 ```bash

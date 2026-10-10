@@ -75,7 +75,7 @@ class DriverConfiguration:
     """One immutable parameter snapshot captured during configure."""
 
     declared_capabilities: DeviceCapabilities
-    transport: TransportConfiguration
+    transport: TransportConfiguration | None
     device_config: DeviceConfig
     polling_plan: PollingPlan
     publish_rate_hz: float
@@ -137,7 +137,11 @@ class DriverConfiguration:
         )
 
 
-def read_driver_configuration(read_parameter: ParameterReader) -> DriverConfiguration:
+def read_driver_configuration(
+    read_parameter: ParameterReader,
+    *,
+    discovered_capabilities: DeviceCapabilities | None = None,
+) -> DriverConfiguration:
     """Read all final driver parameters without opening or querying a device."""
 
     model_value = read_parameter("model")
@@ -150,7 +154,18 @@ def read_driver_configuration(read_parameter: ParameterReader) -> DriverConfigur
     side = side_value.strip() or None
     capabilities = get_declared_capabilities(model, side=side)
 
-    transport = parse_transport_configuration(read_parameter("transport_json"))
+    if discovered_capabilities is None:
+        transport = parse_transport_configuration(read_parameter("transport_json"))
+    else:
+        if (capabilities.model, capabilities.side) != (
+            discovered_capabilities.model,
+            discovered_capabilities.side,
+        ):
+            raise ValidationError("model/side disagree with the discovery binding")
+        if read_parameter("transport_json") != "":
+            raise ValidationError("discovery bindings cannot use manual transport_json")
+        # The SDK candidate owns the complete transport recipe and endpoint.
+        transport = None
     transaction_timeout_s = _finite_rate(
         "transaction_timeout_s",
         read_parameter("transaction_timeout_s"),

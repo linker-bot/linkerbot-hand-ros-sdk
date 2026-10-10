@@ -7,12 +7,22 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 import rclpy
+from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.lifecycle import TransitionCallbackReturn
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.validate_namespace import InvalidNamespaceException, validate_namespace
 
+from .discovery_config import json_mapping, parse_discovery_config
+from .discovery_deployment import (
+    SelectedHand,
+    deployment_from_selection,
+    load_deployment,
+    output_path,
+    save_deployment,
+    select_hands,
+)
 from .node import (
     CALLBACK_GROUPS_PER_HAND,
     LinkerbotHandNode,
@@ -69,6 +79,16 @@ class MultiHandContainerNode(Node):
         super().__init__(CONTAINER_NODE_NAME, **kwargs)
         self.declare_parameter("device_namespaces", Parameter.Type.STRING_ARRAY)
         self.declare_parameter("autostart", True)
+        for name, value in {
+            "discovery_mode": "",
+            "discovery_config_json": "{}",
+            "driver_parameters_json": "{}",
+            "discovery_namespace": "/",
+            "discovery_output": "",
+            "deployment_config": "",
+            "autostart_override": "",
+        }.items():
+            self.declare_parameter(name, value, ParameterDescriptor(read_only=True))
 
     def read_configuration(self) -> MultiDeviceConfiguration:
         """Return normalized container parameters without constructing a hand."""
@@ -208,6 +228,76 @@ def _normalize_namespaces(value: object) -> tuple[str, ...]:
     return tuple(normalized)
 
 
+def prepare_discovery_startup(
+    container: MultiHandContainerNode,
+) -> tuple[MultiDeviceConfiguration, tuple[SelectedHand, ...]]:
+    """Resolve an explicitly requested mode in the owning runtime process."""
+
+    read = lambda name: container.get_parameter(name).value
+    mode = read("discovery_mode")
+    if mode not in {"single", "multi", "file"}:
+        raise ValueError("unknown discovery startup mode")
+    override = read("autostart_override")
+    if override not in {"", "true", "false"}:
+        raise ValueError("autostart override must be true or false")
+    deployment = None
+    target = None
+    if mode == "file":
+        deployment = load_deployment(read("deployment_config"))
+        config = deployment.discovery
+        autostart = deployment.autostart
+    else:
+        config = parse_discovery_config(json_mapping(read("discovery_config_json")))
+        autostart = True
+        if mode == "multi":
+            # Refuse existing output before accessing any adapters.
+            target = output_path(read("discovery_output"))
+    if override:
+        autostart = override == "true"
+    selected = select_hands(
+        config,
+        single_namespace=read("discovery_namespace") if mode == "single" else None,
+        deployment=deployment,
+        parameters=json_mapping(read("driver_parameters_json")),
+        namespace_prefix=container.get_namespace() if mode == "multi" else "",
+        emit=container.get_logger().info,
+    )
+    if target is not None:
+        save_deployment(target, deployment_from_selection(config, selected, autostart))
+        container.get_logger().info(f"configuration saved: {target}")
+    return MultiDeviceConfiguration(
+        tuple(hand.binding.namespace for hand in selected), autostart
+    ), selected
+
+
+def create_discovered_nodes(
+    configuration: MultiDeviceConfiguration, selected: tuple[SelectedHand, ...]
+) -> tuple[ManagedHandNode, ...]:
+    hands = {hand.binding.namespace: hand for hand in selected}
+
+    def factory(*, namespace: str) -> LinkerbotHandNode:
+        hand = hands[namespace]
+        return LinkerbotHandNode(
+            namespace=namespace,
+            # Local identity rules outrank __ns/__node from the container
+            # process, while retaining global parameters and topic remappings.
+            cli_args=[
+                "--ros-args",
+                "-r",
+                f"__ns:={namespace}",
+                "-r",
+                "__node:=linkerbot_hand",
+            ],
+            discovery_candidate=hand.candidate,
+            parameter_overrides=[
+                Parameter(name, value=value)
+                for name, value in hand.binding.parameters.items()
+            ],
+        )
+
+    return create_hand_nodes(configuration, node_factory=factory)
+
+
 def main(args: list[str] | None = None) -> None:
     """Run all configured hand drivers in one shared Python process."""
 
@@ -218,8 +308,12 @@ def main(args: list[str] | None = None) -> None:
     executor: MultiThreadedExecutor | None = None
     try:
         container = MultiHandContainerNode()
-        configuration = container.read_configuration()
-        nodes = create_hand_nodes(configuration)
+        if container.get_parameter("discovery_mode").value:
+            configuration, selected = prepare_discovery_startup(container)
+            nodes = create_discovered_nodes(configuration, selected)
+        else:
+            configuration = container.read_configuration()
+            nodes = create_hand_nodes(configuration)
         lifecycle = HandLifecycleGroup(nodes)
         executor = MultiThreadedExecutor(
             num_threads=(
@@ -238,6 +332,12 @@ def main(args: list[str] | None = None) -> None:
         spin_until_shutdown(executor, container.get_logger())
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
+    except Exception as error:
+        _log_cleanup_error(
+            None if container is None else container.get_logger(),
+            f"startup failed: {error}",
+        )
+        raise SystemExit(1) from error
     finally:
         logger = None if container is None else container.get_logger()
         if lifecycle is not None and rclpy.ok():
