@@ -11,6 +11,11 @@ section.
 Unreleased
 ----------
 
+* Preserve a hand device when node destruction cannot complete SDK/interface
+  cleanup; report the failure and permit explicit cleanup retries. Add real
+  SDK/shared-transport MiniCANFD lifecycle, busy and retry regressions with
+  memory-only native functions, plus container failure/cancellation cleanup.
+
 * Add discovery diagnostics with SDK backend/native-channel/protocol context,
   observed endpoint IDs, fixed roles, configuration paths and retained causes.
   Include validated single/dual deployments and four-backend scan templates,

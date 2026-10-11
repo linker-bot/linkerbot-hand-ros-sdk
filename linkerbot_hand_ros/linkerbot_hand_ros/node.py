@@ -510,8 +510,12 @@ class LinkerbotHandNode(LifecycleNode):
             return
         self._destroying = True
         try:
-            self._release_runtime()
-            self._destroy_interfaces()
+            released = self._release_runtime()
+            interfaces_destroyed = self._destroy_interfaces()
+            if not released or not interfaces_destroyed:
+                raise RuntimeError(
+                    "driver cleanup incomplete; retry cleanup/destroy_node before reusing resources"
+                )
             self._device = None
             self._configuration = None
             super().destroy_node()
