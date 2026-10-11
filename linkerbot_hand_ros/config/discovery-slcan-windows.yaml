@@ -1,0 +1,14 @@
+# Windows CANable 2.0 FD firmware only; replace COM5 with the verified port.
+backends:
+- slcan
+channels:
+- slcan:COM5
+slcan:
+  channels:
+  - COM5
+  bitrate: 1000000
+  data_bitrate: 5000000
+  probe_protocols:
+  - can_fd
+  bus_options:
+    tty_baudrate: 115200

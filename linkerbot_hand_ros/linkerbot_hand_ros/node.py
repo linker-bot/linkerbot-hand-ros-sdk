@@ -10,7 +10,7 @@ from collections.abc import Callable
 from typing import Any, Protocol
 
 import rclpy
-from linkerbot_hand import HandDevice, HandError, HandSide, ValidationError
+from linkerbot_hand import HandDevice, HandSide, ValidationError
 from linkerbot_hand.discovery import DiscoveryCandidate, DiscoveryStatus
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.exceptions import InvalidHandle
@@ -22,6 +22,7 @@ from rclpy.executors import (
 from rclpy.lifecycle import LifecycleNode, LifecycleState, TransitionCallbackReturn
 from rclpy.parameter import Parameter
 
+from .discovery_diagnostics import candidate_context, exception_details
 from .driver_config import (
     DriverConfiguration,
     read_driver_configuration,
@@ -61,6 +62,11 @@ class LinkerbotHandNode(LifecycleNode):
         self._parameter_fault: str | None = None
         self._discovered_capabilities = (
             None if discovery_candidate is None else discovery_candidate.capabilities
+        )
+        self._discovery_location = (
+            None
+            if discovery_candidate is None
+            else candidate_context(discovery_candidate)
         )
         identity_defaults = {}
         if discovery_candidate is not None:
@@ -122,7 +128,7 @@ class LinkerbotHandNode(LifecycleNode):
             )
             return TransitionCallbackReturn.SUCCESS
         except Exception as error:
-            self.get_logger().error(f"configure failed: {self._error_text(error)}")
+            self._log_device_failure("configure", error)
             self._active = False
             self._close_device()
             self._destroy_interfaces()
@@ -161,7 +167,7 @@ class LinkerbotHandNode(LifecycleNode):
             )
             return TransitionCallbackReturn.SUCCESS
         except Exception as error:
-            self.get_logger().error(f"activate failed: {self._error_text(error)}")
+            self._log_device_failure("activate", error)
             self._rollback_activation(state)
             return TransitionCallbackReturn.FAILURE
 
@@ -457,9 +463,7 @@ class LinkerbotHandNode(LifecycleNode):
             self._device.stop_polling()
             return True
         except Exception as error:
-            self.get_logger().error(
-                f"SDK stop_polling failed: {self._error_text(error)}"
-            )
+            self._log_device_failure("SDK stop_polling", error)
             return False
 
     def _close_device(self) -> bool:
@@ -469,7 +473,7 @@ class LinkerbotHandNode(LifecycleNode):
             self._device.close()
             return True
         except Exception as error:
-            self.get_logger().error(f"SDK close failed: {self._error_text(error)}")
+            self._log_device_failure("SDK close", error)
             return False
 
     def _require_device(self) -> HandDevice:
@@ -491,9 +495,15 @@ class LinkerbotHandNode(LifecycleNode):
 
     @staticmethod
     def _error_text(error: BaseException) -> str:
-        if isinstance(error, HandError):
-            return f"[{error.code.value}] {error}"
-        return str(error)
+        return exception_details(error)
+
+    def _log_device_failure(self, stage: str, error: BaseException) -> None:
+        location = f"node={self.get_fully_qualified_name()}"
+        if self._discovery_location is not None:
+            location += f" {self._discovery_location}"
+        self.get_logger().error(
+            f"{stage} failed: {exception_details(error)} ({location})"
+        )
 
     def destroy_node(self) -> None:
         if self._destroying or self._driver_destroyed:

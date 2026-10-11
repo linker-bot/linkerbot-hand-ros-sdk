@@ -11,6 +11,11 @@ section.
 Unreleased
 ----------
 
+* Add discovery diagnostics with SDK backend/native-channel/protocol context,
+  observed endpoint IDs, fixed roles, configuration paths and retained causes.
+  Include validated single/dual deployments and four-backend scan templates,
+  new-process configuration regressions and bilingual troubleshooting guidance.
+
 * Add explicit ``discover:=true`` launch modes: a unique verified single hand,
   or all verified hands in scope with a concise summary and atomic,
   no-overwrite ``hands.yaml`` export. Reuse generated deployments through

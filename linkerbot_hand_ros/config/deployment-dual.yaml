@@ -1,0 +1,39 @@
+# Example deployment, NOT a record of your devices. autostart=false still scans. Prefer generating hands.yaml from your hardware; these endpoint-only bindings omit serial identity.
+schema: linkerbot_hand_ros.discovery
+version: 1
+autostart: false
+discovery:
+  backends:
+  - socketcan
+  channels:
+  - can0
+  - can1
+hands:
+- namespace: /left_hand
+  match:
+    backend: socketcan
+    channel: can0
+    model: L6
+    side: left
+    wire_protocol: can
+    address:
+      scheme: classic_can_id
+      request_id: 40
+      response_id: 40
+      is_extended_id: false
+  parameters:
+    angles_hz: 50.0
+- namespace: /right_hand
+  match:
+    backend: socketcan
+    channel: can1
+    model: O6
+    side: right
+    wire_protocol: can
+    address:
+      scheme: classic_can_id
+      request_id: 39
+      response_id: 39
+      is_extended_id: false
+  parameters:
+    angles_hz: 50.0

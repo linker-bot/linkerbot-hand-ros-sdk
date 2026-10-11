@@ -23,6 +23,7 @@ from linkerbot_hand.discovery import (
     DiscoveryReport,
     discover_hands,
 )
+from rclpy.exceptions import InvalidNamespaceException
 from rclpy.validate_namespace import validate_namespace
 
 from .discovery_config import (
@@ -31,6 +32,7 @@ from .discovery_config import (
     mapping,
     parse_discovery_config,
 )
+from .discovery_diagnostics import candidate_context, exception_details, failure_context
 from .driver_config import read_driver_configuration
 from .parameter_updates import PARAMETER_DEFAULTS
 
@@ -65,7 +67,10 @@ def normalize_namespace(value: str, *, allow_root: bool = False) -> str:
     if not isinstance(value, str):
         raise ValidationError("namespace must be a string")
     result = "/" + value.strip().strip("/")
-    validate_namespace(result)
+    try:
+        validate_namespace(result)
+    except InvalidNamespaceException as error:
+        raise ValidationError(str(error)) from error
     if result == "/" and not allow_root:
         raise ValidationError("root namespace requires a single hand")
     return result
@@ -155,6 +160,13 @@ def _validate_match(value: object) -> dict:
 
 def load_deployment(path: str | Path) -> Deployment:
     path = Path(path).expanduser().resolve()
+    try:
+        return _load_deployment(path)
+    except (ValidationError, TypeError, ValueError) as error:
+        raise ValidationError(f"deployment_config={path}: {error}") from error
+
+
+def _load_deployment(path: Path) -> Deployment:
     document = mapping(
         load_yaml(path),
         {"schema", "version", "discovery", "hands", "autostart"},
@@ -175,28 +187,34 @@ def load_deployment(path: str | Path) -> Deployment:
     hands = []
     namespaces = set()
     endpoints = set()
-    for value in values:
-        hand = mapping(value, {"namespace", "match", "parameters"}, "hand")
-        namespace = normalize_namespace(
-            hand.get("namespace"), allow_root=len(values) == 1
-        )
-        match = _validate_match(hand.get("match"))
-        endpoint = (match["backend"], match["channel"])
-        if namespace in namespaces or endpoint in endpoints:
+    for index, value in enumerate(values):
+        try:
+            hand = mapping(value, {"namespace", "match", "parameters"}, "hand")
+            namespace = normalize_namespace(
+                hand.get("namespace"), allow_root=len(values) == 1
+            )
+            match = _validate_match(hand.get("match"))
+            endpoint = (match["backend"], match["channel"])
+            if namespace in namespaces or endpoint in endpoints:
+                raise ValidationError(
+                    "duplicate namespace or physical channel in deployment"
+                )
+            namespaces.add(namespace)
+            endpoints.add(endpoint)
+            hands.append(
+                HandBinding(
+                    namespace,
+                    match,
+                    runtime_parameters(
+                        match["model"], match["side"], hand.get("parameters", {})
+                    ),
+                )
+            )
+        except (ValidationError, TypeError, ValueError) as error:
+            role = value.get("namespace") if isinstance(value, dict) else None
             raise ValidationError(
-                "duplicate namespace or physical channel in deployment"
-            )
-        namespaces.add(namespace)
-        endpoints.add(endpoint)
-        hands.append(
-            HandBinding(
-                namespace,
-                match,
-                runtime_parameters(
-                    match["model"], match["side"], hand.get("parameters", {})
-                ),
-            )
-        )
+                f"hands[{index}] namespace={role!r}: {error}"
+            ) from error
     return Deployment(
         parse_discovery_config(document.get("discovery", {}), base_dir=path.parent),
         tuple(hands),
@@ -251,20 +269,20 @@ def save_deployment(path: Path, deployment: Deployment) -> None:
 def _cleanup_report(report: DiscoveryReport, emit: Callable[[str], None]) -> None:
     errors = []
     for failure in report.failures:
-        emit(
-            f"discovery {failure.code}: {failure.message} ({failure.operation}, {failure.error_type})"
-        )
+        location = failure_context(failure)
+        emit(location)
         if failure.cleanup is None:
             continue
         for attempt in range(2):
             try:
                 failure.cleanup()
-                emit("discovery probe cleanup completed")
+                emit(f"discovery probe cleanup completed: {location}")
                 break
             except Exception as error:  # noqa: BLE001 - retain cleanup diagnostics
-                emit(f"discovery cleanup attempt {attempt + 1} failed: {error}")
+                detail = f"{location}; cleanup_cause={exception_details(error)}"
+                emit(f"discovery cleanup attempt {attempt + 1} failed: {detail}")
                 if attempt == 1:
-                    errors.append(str(error))
+                    errors.append(detail)
     if errors:
         raise ValidationError(
             f"discovery cleanup incomplete; startup refused: {errors}"
@@ -281,16 +299,25 @@ def select_hands(
     scan: Callable[[DiscoveryConfig], DiscoveryReport] | None = None,
     emit: Callable[[str], None] = print,
 ) -> tuple[SelectedHand, ...]:
-    emit("scanning hand identities; SDK scan budget is a soft deadline")
-    report = (scan or discover_hands)(config)
+    emit(
+        "scanning hand identities; SDK scan budget is a soft deadline; "
+        f"backends={config.backends or 'SDK platform defaults'} "
+        f"channels={config.channels or 'SDK available channels'}"
+    )
+    try:
+        report = (scan or discover_hands)(config)
+    except Exception as error:
+        emit(f"discovery scan failed: {exception_details(error)}")
+        raise
     # Clear retained probe connections before selecting, saving or activating.
     _cleanup_report(report, emit)
     for candidate in report.candidates:
         physical_side = candidate.reported_side or candidate.side
         side = "unknown" if physical_side is None else physical_side.value
-        problems = ", ".join(p.code for p in candidate.problems)
+        problems = ", ".join(f"{p.code}: {p.message}" for p in candidate.problems)
         emit(
             f"{candidate.channel.name}: {candidate.model or 'unknown'}, {side}, {candidate.channel.provider} [{candidate.status.value}] {problems}".rstrip()
+            + f" ({candidate_context(candidate)})"
         )
     if single_namespace is not None:
         if len(report.candidates) > 1:
@@ -332,7 +359,8 @@ def select_hands(
             ]
             if len(matches) != 1:
                 raise ValidationError(
-                    f"binding {binding.namespace} matched {len(matches)} verified hands; expected exactly one"
+                    f"binding {binding.namespace} matched {len(matches)} verified hands; "
+                    f"expected exactly one for match={binding.match!r}"
                 )
             selected_list.append(SelectedHand(binding, matches[0]))
         selected = tuple(selected_list)
@@ -362,9 +390,16 @@ def select_hands(
             (c.channel.provider, c.channel.name) == channel for c in report.candidates
         )
         if observed > 1:
-            raise ValidationError("one physical channel cannot control multiple hands")
+            raise ValidationError(
+                "one physical channel cannot control multiple hands; "
+                f"namespace={hand.binding.namespace} {candidate_context(candidate)} "
+                f"observed_endpoints={observed}"
+            )
         if channel in channels or candidate.transport.connection_key in recipes:
-            raise ValidationError("one physical channel cannot control multiple hands")
+            raise ValidationError(
+                "one physical channel cannot control multiple hands; "
+                f"namespace={hand.binding.namespace} {candidate_context(candidate)}"
+            )
         channels.add(channel)
         recipes.add(candidate.transport.connection_key)
         emit(

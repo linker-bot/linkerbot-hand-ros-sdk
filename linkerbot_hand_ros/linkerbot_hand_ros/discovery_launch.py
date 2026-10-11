@@ -70,7 +70,10 @@ def _settings(context) -> dict:
     path_value = _value(context, "discovery_config")
     if path_value:
         path = Path(path_value).expanduser().resolve()
-        config = parse_discovery_config(load_yaml(path), base_dir=path.parent)
+        try:
+            config = parse_discovery_config(load_yaml(path), base_dir=path.parent)
+        except ValidationError as error:
+            raise ValidationError(f"discovery_config={path}: {error}") from error
     else:
         config = parse_discovery_config({})
     channels = channel_filter(_value(context, "channels"))
@@ -173,7 +176,7 @@ def build_multi_launch(context, *, default_config):
         )
         if discovery_file:
             if document["schema"] != SCHEMA:
-                raise ValueError("unsupported deployment schema")
+                raise ValueError(f"unsupported deployment schema: config={path}")
             load_deployment(path)
             parameters = [
                 {

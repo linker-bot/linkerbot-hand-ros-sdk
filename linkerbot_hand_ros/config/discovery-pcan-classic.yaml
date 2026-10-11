@@ -1,0 +1,11 @@
+# Windows PCAN classic CAN; edit the native channel and match the device bitrate.
+backends:
+- pcan
+channels:
+- pcan:PCAN_USBBUS1
+pcan:
+  channels:
+  - PCAN_USBBUS1
+  bitrate: 1000000
+  probe_protocols:
+  - can

@@ -1,0 +1,5 @@
+# Limit discovery to an already configured SocketCAN interface; edit can0.
+backends:
+- socketcan
+channels:
+- can0

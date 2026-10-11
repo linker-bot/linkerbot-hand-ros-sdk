@@ -102,6 +102,8 @@ l30_node_ids: [13]
 o30_request_ids: [23]
 ```
 
+本项目的 SLCAN 模板用于 Windows CAN FD（`probe_protocols: [can_fd]`）；PCAN 模板按适配器能力选择经典 CAN 或 FD。
+
 PCAN/SLCAN 支持原生 `channels`、`bitrate`、`data_bitrate`、
 `probe_protocols: [can, can_fd]`、标量 `bus_options` 及 `fd_timing` 内的
 `can.BitTimingFd` 字段。SLCAN 的 `bus_options.tty_baudrate` 是串口速率，
@@ -110,8 +112,10 @@ PCAN/SLCAN 支持原生 `channels`、`bitrate`、`data_bitrate`、
 相对库路径以设置/部署文件目录为基准。逐手 `parameters` 使用已有运行参数名，
 不能夹带手工产品或 transport 字段。launch 与文件范围矛盾时拒绝，不扩大范围。
 
-后端省略时沿用 SDK 平台默认：Linux 为 SocketCAN/MiniCANFD，Windows 为
-PCAN/SLCAN/MiniCANFD。库、权限、已配置接口和适配器固件必须可用。
+后端省略时沿用 SDK 平台默认：Linux 为 SocketCAN（经典 CAN/CAN FD）与 MiniCANFD；Windows 为
+PCAN（经典 CAN/CAN FD）、MiniCANFD、SLCAN（CAN FD）。库、权限、已配置接口和适配器固件必须可用。
 扫描预算不是硬截止，厂商调用和必要清理可能更久；一期不提供运行中重扫、
 热插拔替换或交互输入。软件测试使用源码 SDK/内存协议替身，Windows、适配器及
 各型号实机仍需独立验收。
+
+可复制的适配器设置和单手/双手部署见[配置示例](discovery_examples.md)；按后端、接口、端点和角色定位失败见[故障排查](troubleshooting.md#自动发现与部署加载故障)。

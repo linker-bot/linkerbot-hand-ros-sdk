@@ -23,6 +23,7 @@ from .discovery_deployment import (
     save_deployment,
     select_hands,
 )
+from .discovery_diagnostics import exception_details
 from .node import (
     CALLBACK_GROUPS_PER_HAND,
     LinkerbotHandNode,
@@ -235,6 +236,11 @@ def prepare_discovery_startup(
 
     read = lambda name: container.get_parameter(name).value
     mode = read("discovery_mode")
+    container.get_logger().info(
+        f"preparing discovery mode={mode} "
+        f"deployment_config={read('deployment_config')!r} "
+        f"output={read('discovery_output')!r}"
+    )
     if mode not in {"single", "multi", "file"}:
         raise ValueError("unknown discovery startup mode")
     override = read("autostart_override")
@@ -306,6 +312,7 @@ def main(args: list[str] | None = None) -> None:
     nodes: tuple[ManagedHandNode, ...] = ()
     lifecycle: HandLifecycleGroup | None = None
     executor: MultiThreadedExecutor | None = None
+    stage = "container_configuration"
     try:
         container = MultiHandContainerNode()
         if container.get_parameter("discovery_mode").value:
@@ -314,6 +321,7 @@ def main(args: list[str] | None = None) -> None:
         else:
             configuration = container.read_configuration()
             nodes = create_hand_nodes(configuration)
+        stage = "executor_configuration"
         lifecycle = HandLifecycleGroup(nodes)
         executor = MultiThreadedExecutor(
             num_threads=(
@@ -324,7 +332,9 @@ def main(args: list[str] | None = None) -> None:
         for node in nodes:
             executor.add_node(node)
         if configuration.autostart:
+            stage = "group_activation"
             lifecycle.start()
+        stage = "running"
         container.get_logger().info(
             f"running {len(nodes)} hand lifecycle nodes in one process: "
             f"{', '.join(configuration.device_namespaces)}"
@@ -335,7 +345,7 @@ def main(args: list[str] | None = None) -> None:
     except Exception as error:
         _log_cleanup_error(
             None if container is None else container.get_logger(),
-            f"startup failed: {error}",
+            f"startup failed: stage={stage} {exception_details(error)}",
         )
         raise SystemExit(1) from error
     finally:

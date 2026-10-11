@@ -1,0 +1,9 @@
+# Windows only: replace the DLL path; device 0 is DLL devNum and channel is 0. config 0x06 disables built-in termination; verify external termination.
+backends:
+- minicanfd
+channels:
+- minicanfd:0:0
+minicanfd:
+  library_path: ./vendor/HCanbus.dll
+  config:
+    config: 6

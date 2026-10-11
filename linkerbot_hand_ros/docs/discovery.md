@@ -114,6 +114,8 @@ l30_node_ids: [13]
 o30_request_ids: [23]
 ```
 
+The supported SLCAN templates are Windows CAN FD (`probe_protocols: [can_fd]`); PCAN templates select classic CAN or FD according to adapter capability.
+
 PCAN/SLCAN sections support native `channels`, `bitrate`, `data_bitrate`,
 `probe_protocols: [can, can_fd]`, scalar `bus_options` and `can.BitTimingFd`
 fields under `fd_timing`. SLCAN `bus_options.tty_baudrate` is the serial rate,
@@ -123,9 +125,12 @@ paths resolve against the settings/deployment directory. Per-hand `parameters`
 use existing runtime names; manual product/transport fields are forbidden.
 Conflicting launch/file channel scopes fail instead of expanding scope.
 
-Backend omission uses SDK platform defaults: SocketCAN/MiniCANFD on Linux,
-PCAN/SLCAN/MiniCANFD on Windows. Libraries, permissions, configured interfaces
+Backend omission uses SDK platform defaults: SocketCAN (classic CAN/CAN FD) and
+MiniCANFD on Linux; PCAN (classic CAN/CAN FD), MiniCANFD and SLCAN (CAN FD) on
+Windows. Explicit backends only filter these sources. Libraries, permissions, configured interfaces
 and adapter firmware must be available. The scan budget is soft; vendor calls
 and required cleanup can take longer. No runtime rescan, hotplug substitution
 or interactive prompt is provided. Automated tests use source SDKs/in-memory
 peers; Windows and adapter/hand hardware require separate acceptance.
+
+Configuration templates and fixed deployments: [examples](discovery_examples.md). Locate failures by backend/interface/endpoint/role using [discovery troubleshooting](discovery_troubleshooting.md).

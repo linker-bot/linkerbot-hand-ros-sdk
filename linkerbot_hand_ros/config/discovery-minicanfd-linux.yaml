@@ -1,0 +1,12 @@
+# Linux only: replace the library path and confirm device 0 really has channel 0. config 0x06 disables built-in termination; verify external termination.
+backends:
+- minicanfd
+channels:
+- minicanfd:0:0
+minicanfd:
+  library_path: ./vendor/libcanbus.so
+  linux_channels:
+    0:
+    - 0
+  config:
+    config: 6
