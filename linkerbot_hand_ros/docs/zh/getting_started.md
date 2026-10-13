@@ -33,7 +33,7 @@ colcon 使用 Ubuntu 提供的 setuptools/wheel；venv 通过 `--system-site-pac
 mkdir -p ~/linkerbot_deps
 cd ~/linkerbot_deps
 git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-transport.git linkerbot-transport
+  https://gitea.linkerhub.work/linker-bot/linkerbot-transport.git linkerbot-transport
 git clone --branch main --depth 1 \
   https://gitea.linkerhub.work/linker-bot/linkerbot-hand-python.git linkerbot-hand
 python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
@@ -41,26 +41,34 @@ python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
 mkdir -p ~/linkerbot_ws/src
 cd ~/linkerbot_ws/src
 git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand-ros2.git linkerbot-hand-ros
+  https://gitea.linkerhub.work/linker-bot/linkerbot-hand-ros2.git linkerbot-hand-ros
 ```
 
 本地 `linkerbot-hand` 目录对应 `linkerbot-hand-python` 仓库，Python 包名仍为 `linkerbot-hand`。
 
 ## 3. 构建并验证
 
+在已加载 ROS 和 venv 的终端构建。rosdep 根据三个包的声明安装系统依赖，
+包括 GUI 使用的 RViz、Joint State Publisher GUI 和 Robot State Publisher。
+URDF 和 mesh 不由 rosdep 安装，按下方 GUI 资源步骤单独准备。
+
 ```bash
 cd ~/linkerbot_ws
 rosdep install --from-paths src --ignore-src -y --rosdistro jazzy
+rosdep check --from-paths src --ignore-src --rosdistro jazzy
 python -m colcon build --symlink-install \
   --cmake-args -DPython3_EXECUTABLE="$(command -v python)"
 source ~/linkerbot_ws/install/setup.bash
 python -c 'import linkerbot_transport, linkerbot_hand; print("Python dependencies: OK")'
 ros2 pkg prefix linkerbot_hand_msgs
 ros2 pkg prefix linkerbot_hand_ros
+ros2 pkg prefix linkerbot_hand_gui
+ros2 pkg executables linkerbot_hand_gui
 ros2 interface show linkerbot_hand_msgs/msg/HandJointCommand
 ```
 
-应能导入依赖、找到 ROS package 并显示消息定义；这一步不连接设备。
+确认 rosdep 检查成功，三个 `ros2 pkg prefix` 均指向当前工作空间；GUI 可执行文件列表
+应包含 `linkerbot_hand_gui o6_gui_bridge`，消息定义应正常显示。以上检查不连接设备或打开图形窗口。
 rosdep 的实际错误必须处理，单独的 `pkg_resources` 弃用警告不代表失败。
 构建命令显式指定当前 Python，避免 CMake 选择与 ROS ABI 不匹配的解释器。
 
@@ -71,6 +79,13 @@ source /opt/ros/jazzy/setup.bash
 source ~/venvs/linkerbot-hand-ros/bin/activate
 source ~/linkerbot_ws/install/setup.bash
 ```
+
+### 可选：准备 O6 GUI 资源
+
+需要 O6 可视化时，按 [GUI 资源准备](../../../linkerbot_hand_gui/README.md#准备模型资源)
+安装 Git LFS 并下载 `linker-sim-assets`，再按[仅预览](../../../linkerbot_hand_gui/README.md#仅预览)
+验证模型显示；预览需要桌面图形环境，无需连接设备。GUI 包构建成功不代表模型资源已下载。
+驱动通信和命令行使用无需这些模型资源。
 
 ## 5. 连接一只手
 

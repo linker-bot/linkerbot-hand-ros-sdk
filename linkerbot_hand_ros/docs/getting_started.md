@@ -33,7 +33,7 @@ driver and GUI together. Existing checkouts use the [update guide](update.md).
 mkdir -p ~/linkerbot_deps
 cd ~/linkerbot_deps
 git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-transport.git linkerbot-transport
+  https://gitea.linkerhub.work/linker-bot/linkerbot-transport.git linkerbot-transport
 git clone --branch main --depth 1 \
   https://gitea.linkerhub.work/linker-bot/linkerbot-hand-python.git linkerbot-hand
 python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
@@ -41,7 +41,7 @@ python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
 mkdir -p ~/linkerbot_ws/src
 cd ~/linkerbot_ws/src
 git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand-ros2.git linkerbot-hand-ros
+  https://gitea.linkerhub.work/linker-bot/linkerbot-hand-ros2.git linkerbot-hand-ros
 ```
 
 The local directory `linkerbot-hand` contains the `linkerbot-hand-python` repository;
@@ -49,20 +49,30 @@ its Python distribution is named `linkerbot-hand`.
 
 ## 3. Build and verify
 
+Build in a terminal with ROS and the venv loaded. rosdep installs system dependencies
+from all three package manifests, including RViz, Joint State Publisher GUI and
+Robot State Publisher. URDF and mesh assets are separate; prepare them using the GUI
+resource instructions below.
+
 ```bash
 cd ~/linkerbot_ws
 rosdep install --from-paths src --ignore-src -y --rosdistro jazzy
+rosdep check --from-paths src --ignore-src --rosdistro jazzy
 python -m colcon build --symlink-install \
   --cmake-args -DPython3_EXECUTABLE="$(command -v python)"
 source ~/linkerbot_ws/install/setup.bash
 python -c 'import linkerbot_transport, linkerbot_hand; print("Python dependencies: OK")'
 ros2 pkg prefix linkerbot_hand_msgs
 ros2 pkg prefix linkerbot_hand_ros
+ros2 pkg prefix linkerbot_hand_gui
+ros2 pkg executables linkerbot_hand_gui
 ros2 interface show linkerbot_hand_msgs/msg/HandJointCommand
 ```
 
-The imports, package prefixes and interface definition should all resolve. This check
-performs no device I/O. Resolve every rosdep error; a `pkg_resources` deprecation warning alone is not a failure.
+Confirm rosdep succeeds and all three package prefixes point to this workspace.
+The GUI executable list should include `linkerbot_hand_gui o6_gui_bridge`, and the
+message definition should display successfully. These checks perform no device I/O
+and open no graphical windows. Resolve every rosdep error; a `pkg_resources` deprecation warning alone is not a failure.
 CMake explicitly uses the active Python interpreter to match the ROS ABI.
 
 ## 4. Load each terminal
@@ -72,6 +82,14 @@ source /opt/ros/jazzy/setup.bash
 source ~/venvs/linkerbot-hand-ros/bin/activate
 source ~/linkerbot_ws/install/setup.bash
 ```
+
+### Optional: prepare O6 GUI assets
+
+For O6 visualization, follow [GUI asset setup](../../linkerbot_hand_gui/README.md#准备模型资源)
+to install Git LFS and download `linker-sim-assets`, then check the model with
+[preview mode](../../linkerbot_hand_gui/README.md#仅预览). Preview requires a graphical
+desktop but no device. Building the GUI package does not download model assets.
+The driver and command-line tools do not require these assets.
 
 ## 5. Connect one hand
 
