@@ -6,8 +6,7 @@
 2. percent 角度连续提交 + 角度查询/反馈 + 完整多指触觉事务。
 
 它不会设置速度、电流上限或转矩上限，也不把单个关节、触觉 cell、单指或 CAN 分片
-当成独立样本。默认目标取首次有效 percent 角度，`angle_amplitude=0`，因此不会自动全开、
-握拳或主动改变姿态。
+当成独立样本。默认目标取首次有效 percent 角度，`angle_amplitude=0`，因此目标保持起始姿态，但仍持续发送实机命令，不能视作只读测试。
 
 工具在能力发现完成后根据 force 的 `payload_projection` 选择矩阵或 descriptor 话题。
 自动配置会清零所有 `force_<字段>_hz`，再设置 `force_hz`，避免继承旧字段频率
@@ -50,17 +49,7 @@ ROS publish Hz 则单独反映状态发布和 DDS 接收链路。diagnostics 同
 - 测试期间没有其他角度发布者或主动设备查询程序。
 - `command_rate_hz` 启动时不低于最高候选角度频率，并保留调度余量。
 - 总线 bitrate、终端电阻、设备 ID、急停和机械空间已单独验证。
-- 使用 Transport 和 Hand SDK 最新 `main` 源码（已有目录时按[快速入门](getting_started.md)更新）：
-
-```bash
-mkdir -p ~/linkerbot_deps
-cd ~/linkerbot_deps
-git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-transport.git linkerbot-transport
-git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand.git linkerbot-hand
-python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
-```
+- 已按[安装](getting_started.md)或[更新](update.md)准备 Transport、Hand Python 和 ROS 的最新 `main`。
 
 启动示例：
 

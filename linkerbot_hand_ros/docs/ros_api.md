@@ -4,6 +4,8 @@ The driver exposes the latest Hand SDK `main` contract through typed interfaces.
 arrays always follow channel names published in `~/capabilities`; there is no
 ROS model table.
 
+[简体中文](zh/ros_api.md) · [Manual](../README.md)
+
 ## Lifecycle
 
 | Transition | Device behavior |
@@ -15,92 +17,15 @@ ROS model table.
 
 ## Parameters
 
-Static parameters are accepted only while unconfigured:
-
-`model`, `side`, `transport_json`, `command_rate_hz`,
-`discrete_queue_capacity`, `mailbox_capacity`, `route_queue_capacity`,
-`identity_timeout_s`, `transaction_timeout_s`, `shutdown_timeout_s`,
-`auto_reconnect`, `reconnect_initial_delay_s`, and
-`reconnect_max_delay_s`, `recovery_max_attempts`, `recovery_timeout_s`, and
-`recovery_retry_delay_s`.
-
-`identity_timeout_s` defaults to `0.2` seconds per identity response stage,
-including L30/O30 follow-up stages. `transaction_timeout_s` defaults to `0.0`,
-which maps to SDK `None` and preserves each protocol's response window. Positive
-values override each ordinary response stage for baseline reads, getters,
-polling and commands requiring a reply. Use a Hand SDK with optional transaction
-timeout support. These windows start after the stage's request batch is sent;
-complete replies finish the wait immediately. Protocol pacing, dispatch-only
-commands and retry behavior are unchanged. Service `timeout_s` remains a
-separate caller wait budget, not a response-window override or recovery cancel.
-
-Recovery uses at most `recovery_max_attempts=3` initialization attempts per cycle
-and a separate `recovery_timeout_s=5.0` execution budget. Only identity/baseline
-response timeouts are retried; writes, malformed replies and identity mismatches
-are not. Before retrying, SDK discards this endpoint's replies until it has been
-quiet for the maximum of `recovery_retry_delay_s=0.2`, the failed response window
-and the protocol guard. Each arrival restarts that quiet interval, within the
-same execution budget. Protocols without request sequence numbers cannot identify
-arbitrarily late replies beyond this window. Blocking transport I/O is checked
-on return; expired recovery cannot commit readiness. Caller wait expiry does not
-cancel shared recovery. Enabled automatic reconnect may start another bounded
-cycle after backoff. These parameters require a Hand SDK with bounded recovery.
-
-Runtime parameters are `publish_rate_hz`, `diagnostic_rate_hz`, `angles_hz`,
-`speeds_hz`, `force_hz`, `temperature_hz`, `current_hz`, `faults_hz`,
-`torques_hz`, `voltage_hz`, and `angle_feedback`. The feedback policy accepts
-`query_only`, `command_feedback_only`, or `adaptive`. Zero disables that SDK
-polling channel; `publish_rate_hz=0` only pauses ROS state publication. Runtime capability
-fallback is still checked from SDK memory and republished at 10 Hz without
-performing device I/O. The production process uses a `MultiThreadedExecutor`;
-SDK cache revisions wake the state publisher immediately. `publish_rate_hz`
-controls idle cache checks for age/stale transitions, and zero pauses ROS state
-publication. An unchanged sequence is never republished.
-
-With `query_only`, verified angle-command feedback remains available in the SDK
-snapshot and metrics but is not published on `~/state/angles`; that topic then
-contains active-query responses only. The other feedback policies publish
-verified command feedback normally.
-
-To determine whether angle writes can provide feedback, find the `angles` entry
-in `~/capabilities.commands` and read `returns_current_state`. A true value means
-the response contains current state usable as feedback; it does not mean target
-echo, protocol ACK or mechanical arrival. The SDK rejects `command_feedback_only`
-with a nonzero angle rate if this flag is false. Use the connected SDK's declaration.
-
-Capability schema `1.5` includes this field, `force_fields`, `payload_projection`, and extended
-identity metadata. Build messages, driver, GUI and all external consumers with
-consistent ROSIDL definitions from the latest `main`.
-
-Runtime rate changes apply only after all ROS parameter validators accept and
-ROS commits the values. Later validation rejection has no SDK/timer side
-effects. If application fails, the driver compensates by restoring parameters
-and runtime configuration and returns `successful=false`. Parameter events may
-show both the proposal and restoration; use the final service response to judge
-application. A failed restoration disables control and closes the runtime;
-perform cleanup, configure and activate before resuming. If the lifecycle error
-path already completed cleanup, configure and activate are sufficient. Nested
-parameter updates from callbacks are rejected. Direct application calls to
-parameter/lifecycle methods must be serialized like the standard ROS services.
-
-The default transport is:
-
-```json
-{"backend":"socketcan","channel":"can0"}
-```
+Defaults, live update behavior, timeouts and recovery are specified in
+[Lifecycle and parameters](configuration.md). Tactile polling uses `force_hz` or
+`force_<field>_hz`; [tactile fields](force.md) explains shared queries.
 
 ## Multi-Device Process
 
-`multi_hand.launch.py` loads multiple `/namespace/linkerbot_hand` Lifecycle
-nodes into one Python process from a ROS parameter file. The process-level
-parameters are `device_namespaces` and `autostart`. With
-autostart enabled, all nodes configure before any node activates; a failure
-rolls the group back in reverse order. Identical physical transport keys share
-one process-local runtime. Separate driver processes cannot share that arbiter.
-The maintained hand topology is one hand per physical CAN/CAN FD channel;
-the bundled example uses `can0` for L6 left and `can1` for O6 right. Runtime
-sharing is a resource mechanism, not support for connecting multiple hands to
-one channel. Namespaces distinguish ROS entities, not device traffic.
+Use [discovery](discovery.md) or [manual multi-hand YAML](configuration.md#multi-device).
+Each hand has its own namespace and physical channel. Group startup configures every node
+before activation; failures trigger reverse-order cleanup. ROS namespaces do not isolate device traffic.
 
 ## Command Topics
 
@@ -117,8 +42,7 @@ one channel. Namespaces distinguish ROS entities, not device traffic.
 | `~/command/position_kp`, `~/command/position_kd`, `~/command/torque_kd` | `linkerbot_hand_msgs/msg/HandRawCommand` | L6 raw per-joint control gains |
 | `~/command/status` | `linkerbot_hand_msgs/msg/HandCommandStatusBatch` | Bounded batch of changed SDK command histories |
 
-Continuous command topics use best-effort, depth-one QoS. Unsupported command
-topics are not subscribed while active. `ACCEPTED` means admitted to the SDK;
+Continuous command topics use best-effort, depth-one QoS. The active driver subscribes only to supported commands. `ACCEPTED` means admitted to the SDK;
 `DISPATCHED` means transport send succeeded; `ACKNOWLEDGED` requires an explicit
 device-protocol ACK. None of these means mechanical arrival.
 
@@ -162,69 +86,20 @@ is not measured physical torque. Current limits (`0x02`) and live current
 | `~/device_info` | `HandDeviceInfo` | Cached verified identity and version fields |
 | `~/state/angles` | `HandJointState` | Raw, percent, and optional radians from one sample |
 | `~/state/<semantic>` | `HandTelemetry` | Protocol-raw typed telemetry/configuration sample |
-| `~/state/force` | `HandTelemetry` | Scalar force when the profile provides it |
+| `~/state/force` | `HandTelemetry` | Raw-vector projection when declared; no current model uses it |
 | `~/state/tactile` | `HandTactileState` | One complete multi-finger tactile transaction |
 | `~/state/tactile_sensors` | `HandTactileSensorState` | Complete descriptor tactile sample, including absent sensor identities |
 | `~/state/normal_force_resultant` | `HandNormalForceResultant` | Five scalar FnS values derived from the same descriptor sample, when available |
 | `~/state/stall_protection` | `HandStallProtectionState` | Three independent raw stall settings |
 | `/diagnostics` | `diagnostic_msgs/msg/DiagnosticArray` | Zero-I/O SDK health and transport metrics |
 
-Read the force capability's `payload_projection`: `tactile_matrix` selects
-`state/tactile`, `tactile_descriptor` selects `state/tactile_sensors` and the
-optional resultant projection, and `raw_vector` selects `state/force`. Six current
-models use matrices; O30 uses descriptors; none uses the `raw_vector` projection.
-`HandCommandClient.telemetry_capability("force")` returns copied metadata or None
-when absent/disabled; it does not query the device or prove driver readiness.
+Tactile fields use `HandForceField` on `~/state/force_fn`, `force_fns`, `force_ft`,
+`force_fts`, `force_fd`, `force_fds` and `force_px`. Projection selection, descriptor
+metadata and sampling rates are documented in [tactile fields](force.md).
 
-Named raw tactile quantities publish as `HandForceField` on
-`~/state/force_fn`, `force_fns`, `force_ft`, `force_fts`, `force_fd`, `force_fds`
-and `force_px`. Each sensor retains presence, raw arrays, validity, units and
-encoding; each field retains its own acquisition metadata and query channel.
-L20Lite adds scalar fns/fts/fds/px besides matrices. O30 support remains unknown
-until descriptor discovery; `capabilities.force_fields` and
-`HandCommandClient.force_field_capability(name)` expose that distinction.
-
-Set `force_<field>_hz` for individual rates. `force_hz` remains shorthand for
-available fn + fns, and cannot combine with positive fn/fns-specific rates.
-O30 descriptor fields share one physical query at the maximum requested rate;
-each sample contains the fields actually provided by those sensors. Independent
-models query separately. ROS adds no CAN queries and
-never sums matrix values to manufacture resultants. See the
-[complete force guide](zh/force.md).
-Sensor `maximum_rows/maximum_columns` and `requested_rows/requested_columns`
-preserve device metadata without reshaping fields. Actual byte ranges and element counts come from the descriptor.
-Selector, availability, position mode and rectangle-fill flag are preserved.
-An absent sensor has empty fields/bytes, not fabricated zero measurements. FnS is
-not recomputed by summing matrix cells and is not converted to newtons.
-
-### O30 TASHAN_GATHER scalar fields
-
-For the observed descriptor `Fn_F32_1;Ft_F32_1;Fd_U16_1;Px_U32_1`, each available
-fingertip supplies one value per field in a 14-byte little-endian stream. ROS
-publishes lowercase `fn/ft/fd/px` through the existing `HandForceField` topics;
-each present sensor has one `raw` value. Zero Fn, Ft or Px remains a present
-sample, not an absent sensor. Preserve descriptor metadata and raw bytes on
-`~/state/tactile_sensors`; row/column metadata does not turn these fields into
-matrices or three-dimensional force vectors.
-
-All four fields from the same native sample share sequence, collection time,
-origin and connection generation, with `query_channel="force"`. For example,
-`force_fn_hz=10`, `force_ft_hz=20`, `force_fd_hz=15`, `force_px_hz=5` request one
-20 Hz query, not 50 Hz. Support is unknown before descriptor discovery; after
-this layout is observed, fn/ft/fd/px are supported and fns/fts/fds are absent.
-Use the verified field capabilities rather than assuming every O30 sensor has
-the same layout.
-
-This descriptor provides no FnS, so it publishes no new `force_fns` sample or
-`normal_force_resultant`; ROS does not sum or reinterpret Fn to manufacture one.
-An advertised topic alone does not establish field support; check
-`capabilities.force_fields.support_known/supported` and the actual samples.
-An absent fingertip keeps its identity with `present=false` and empty arrays.
-Fn/Ft retain the device-reported force unit. Fd/Px do not inherit that unit;
-their unit remains unknown unless the SDK provides one. Fd `65535` is preserved
-as raw U16 without angle conversion or a ROS-defined invalid-value rule. Its
-physical meaning is unconfirmed; `valid_values` only carries the SDK's judgement.
-No new message schema or separate CAN query is required.
+<a id="o30-tashan_gather-scalar-fields"></a>
+O30 TASHAN_GATHER exposes fn/ft/fd/px per-finger scalars; see the
+[layout and validity rules](force.md#o30-tashan_gather).
 
 Device info and identity capabilities include adapter/control/bootloader versions,
 protocol name/version, supply range, MCU UID, build time, supported interfaces and
@@ -257,8 +132,7 @@ have a defined meaning; other false values do not mean the device is healthy.
 L6 keeps MCU/motor temperatures, both overload flags and A/C/B phase currents
 separate. L20 keeps motor communication, self-test, soft lock, stall and rotor
 lock separate. See the [message field reference](../../linkerbot_hand_msgs/README.md).
-The added fault fields change the ROS wire type: rebuild messages, driver and
-all fault-topic consumers together.
+Build messages and all consumers from consistent `main` interface definitions.
 
 ## Services
 
@@ -283,6 +157,12 @@ all fault-topic consumers together.
 | `~/enable`, `~/disable`, `~/calibrate` | `SubmitCommand` | Capability-gated asynchronous acceptance |
 | `~/recover` | `Recover` | Bounded identity-verified safe recovery |
 
+Services are created according to command, telemetry or operation capabilities and require an
+active driver. `SetRawValues`/`SubmitCommand` responses report admission through `accepted`;
+follow the returned `command_id` in command status (`client_id=0` for service commands).
+Topic commands use `(client_id, user_sequence)`; rejection before SDK admission can appear
+only in diagnostics without a command handle. Use setter services when admission feedback is required.
+
 Active reads run in one separate bounded admin worker. Control callbacks and
 state publishers never wait for these transactions. Services return stable
 `error_code` fields; clients must not parse error text.
@@ -292,168 +172,84 @@ transactions, command-feedback samples, policy-counted feedback samples,
 feedback policy, deadlines, timeouts, and cached data age. These counters let
 benchmarks distinguish active angle queries from verified command feedback.
 
-See the [Chinese API reference](zh/ros_api.md) for examples and QoS details.
+Examples: [commands and Python](examples.md).
 
 ## L6 Control Gains
 
-`HandCommandClient.set_position_kp(values)`, `set_position_kd(values)` and
-`set_torque_kd(values)` publish six raw joint values to their matching
-`~/command/<name>` topics. Reliable `~/set_<name>` services report bounded FIFO
-admission; `accepted` does not mean a device ACK. Correlate service commands by
-their returned `command_id`, and topic commands by `(client_id, user_sequence)`.
-All three share the SDK's configuration FIFO without replacing each other.
-
-| Name | Opcode | Raw meaning and range |
-| --- | --- | --- |
-| `position_kp` | `0x06` | Position mode, integers 0..200; physical Kp = raw × 10, default raw 50. SDK uses the documented Kp upper bound where the generic byte range conflicts. |
-| `position_kd` | `0x07` | Position mode, integers 0..255; default 21, recommended maximum 40 is not a hard limit. |
-| `torque_kd` | `0x08` | Torque mode, integers 0..255; default 1, no physical unit or scaling specified. |
-
-The Kd overview permits 0..255 while its per-byte description says 1..255;
-ROS uses SDK capability ranges and retains its conflict notes. Values remain
-raw, with no multiplication, automatic mode switch or non-volatile save.
-Call `~/get_<name>` with `GetRawValues` while active for a fresh device read;
-observe `~/state/<name>` for changed cached samples. Query and write-response
-samples retain SDK origins, units and scale notes, and are configuration rather
-than physical measurements. There are no gain polling parameters. Unsupported
-models expose none of these services or driver subscriptions.
+`position_kp`, `position_kd` and `torque_kd` provide command topics, reliable setter
+services, query services and cached state. See [L6 model features](models.md#l6) for
+ranges and raw semantics. Setters report FIFO admission, not protocol completion;
+there is no gain polling parameter or implicit mode change/save.
 
 ## On-Demand Raw Reads
 
-Stall output uses `hold_current` for every supported model, including L20Lite C7.
-L20Lite exposes all three stall setter services using the shared FIFO. Its state contains confirmed write
-echoes with original metadata, and no `get_stall_protection` read service exists.
+`GetRawValues` endpoints are created during configure from telemetry capabilities and called
+while active. Command support alone does not imply a readable channel. Service queries update
+SDK caches and normal state publication; subscribing to a topic does not query the device,
+enable polling or send configuration writes.
 
-The `GetRawValues` endpoints above are registered during configure when the
-corresponding telemetry capability exists. Call them while active. They reuse
-the SDK getters; subscribing to `~/state/<semantic>` only observes the cache
-and does not query the device. A successful query updates that cache, and normal
-state publication emits the changed sample when publication is enabled. Service
-reads do not enable polling or send configuration writes.
-
-Read `~/capabilities.telemetry` to select the supported endpoint and its
-`read_mode`; command support alone does not imply a readable channel:
-
-| `read_mode` | Getter behavior | Current examples |
+| `read_mode` | Behavior | Examples |
 | --- | --- | --- |
-| `query` | Request a post-call fresh device sample | O6 configured speeds/accelerations; O30 motion times |
-| `command_response` | Return the last valid device write response, without a new query | O6 current limits; L6 configured speeds; L20Lite configured speeds/current limits |
-| `command_cache` | Return the last valid locally dispatched command sample, without device confirmation or a new query | L30 configured speeds/current limits |
+| `query` | Request a fresh post-call device sample | O6 configured speeds/accelerations, O30 motion times |
+| `command_response` | Read the last valid device write reply without I/O | L6 configured speeds, O6 current limits, L20Lite settings |
+| `command_cache` | Read the last valid locally dispatched command without device confirmation | L30 configured speeds/current limits |
 
-O6 `current_hz` polls live current on `~/state/currents`. The SDK interprets a
-`0x02` query reply as measured current (`device_measured=true`,
-`device_queried=true`, `ORIGIN_DEVICE_RESPONSE`), not as current-limit readback.
-An acknowledged `~/command/current_limits` write instead retains the complete
-device reply on `~/state/current_limits`; the reported values can differ from
-the target. This setting sample has `ORIGIN_DEVICE_CONFIG_RESPONSE`,
-`device_measured=false` and `device_queried=false`.
+Check `success`, then `state.meta`, raw units, scale notes and confidence. Cache reads retain
+original sequence and collection time and can succeed with `stale=true`. `device_queried`
+describes channel capability; `meta.origin` identifies the particular sample. No physical-unit
+conversion is performed. Use structured fields rather than response message text.
 
-O6 `~/get_current_limits` reads that `command_response` cache without sending a
-query or a write. Before a complete valid write reply exists, including after a
-failed write or SDK recovery to a new connection generation, it returns
-`unsupported_operation` with invalid state. Cache reads retain the original
-sequence and collection time; `success=true` does not imply fresh data and
-the returned sample may be stale. Live-current reads and polling do not populate
-or replace the limit cache, and limit writes do not replace measured current.
-If a later write fails in the same connection generation, the previous valid
-echo remains readable with its original metadata; it does not confirm the failed
-target. Recovery invalidates that cache until a new complete write reply arrives.
-Both channels retain raw counts and the SDK's conflicting scale notes;
-ROS does not convert them to mA.
+Current and torque interfaces remain independent:
 
-L20/L20Lite publish live current on `~/state/currents`, polled with `current_hz`,
-and retain `device_measured=true`. L20 has no current-limit readback service.
-L20Lite exposes `~/get_configured_speeds` and `~/get_current_limits` as `command_response` caches.
-Its `~/command/speeds` and `~/command/current_limits` finish as `ACKNOWLEDGED`
-only after both valid write replies arrive. Their actual returned values publish
-to `~/state/configured_speeds` and `~/state/current_limits` with
-`ORIGIN_DEVICE_CONFIG_RESPONSE`, `device_measured=false` and `device_queried=false`.
-These service calls send no device request and preserve sample sequence and time;
-before a complete echo exists they return `unsupported_operation` and invalid state.
-Live speed/current queries and polling remain independent of setting echoes.
+- Live current uses `current_hz` and `state/currents`; it does not populate or replace current limits.
+- O6 `get_current_limits` retains complete write replies, whose values may differ from the target.
+  They use `ORIGIN_DEVICE_CONFIG_RESPONSE`, `device_measured=false`, `device_queried=false`.
+  A later failed write in the same generation leaves the previous valid reply readable, without
+  confirming the failed target. Recovery invalidates it until another complete write reply.
+- L20 has no limit readback. L20Lite speed/current-limit commands require both valid write replies
+  for ACK; their configuration caches are independent of measured speed/current.
+- O30 current limits (`0x04`) and torque limits (`0x06`) have separate commands, getters and state.
+  `torques_hz` reads measured torque and does not imply support for `command/torques`.
+- L6 `command/torques` selects output/mode as described above.
 
-O30 publishes measured current and torque on `~/state/currents` and
-`~/state/torques`, using `current_hz` and `torques_hz` respectively. Its two limit
-objects use `~/get_current_limits` and `~/get_torques_limits`, updating the
-corresponding limit state topics. All values and scale metadata come from the SDK.
+See [model features](models.md) for each model's supported settings and operations.
+L20Lite stall protection has three setters and confirmed write-response state, but no
+`get_stall_protection`; `hold_current` is the common post-stall current field.
 
-Current and torque limits use the following interfaces; select them using the
-connected device's capabilities:
+| Failure | Result |
+| --- | --- |
+| No valid command-derived sample | `unsupported_operation`, invalid state; no write is sent to manufacture a sample |
+| Optional query disabled for this firmware | `unsupported_firmware`; declared endpoint remains |
+| Inactive or closing | `device_not_ready` |
+| Invalid timeout | `validation` |
+| SDK timeout/protocol failure | Original stable SDK error code |
 
-| Model | Limit command/client method | State/read service |
-| --- | --- | --- |
-| O6 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits`, command-response cache |
-| L6 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits`, device query |
-| L20 | `current_limits` / `set_current_limits()` | `currents` with `current_hz`; no limit readback |
-| L20Lite | `current_limits` / `set_current_limits()` | Live `currents` with `current_hz`; separate `current_limits` state/getter retains complete write echoes without querying |
-| O20 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits` |
-| L30 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits`, local command cache |
-| O30 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits` |
-| O30 | `torques_limits` / `set_torques_limits()` | `torques_limits` / `get_torques_limits` |
-
-O30's 0x04 current interfaces are independent of 0x06 torque.
-L6 declares the raw `set_torques()` output/mode command described above. O30's
-torque-limit command does not enable that command; command and telemetry
-capabilities remain independent.
-
-`state` retains raw values, channel names, units, scale notes, confidence and
-`meta`. For cache/response modes, collection time and sequence remain those of
-the original sample; age and staleness describe it at read time. A successful
-cached read may have `meta.stale=true`. `device_queried` describes the channel's
-capability, not the origin of every published sample; use `meta.origin` for the
-particular sample. In command-response/cache modes the success message states
-that no device query was performed; branch on structured metadata, not that text.
-
-Check `success` before consuming `state`. An unavailable command-derived sample
-returns `unsupported_operation`; the service never sends a write to manufacture
-a sample. Runtime firmware rejection keeps the declared endpoint but returns
-`unsupported_firmware` once the SDK disables that optional query. An inactive
-or closing driver returns `device_not_ready`; invalid timeouts return
-`validation`; SDK timeout/protocol errors retain their stable codes. `timeout_s`
-must be finite and positive, with the management-worker margin fitting inside
-`shutdown_timeout_s`. No firmware-version gate is added. Queries still share SDK
-device/bus scheduling with commands, so use them on demand within the bus budget.
+`timeout_s` must be finite and positive, with worker shutdown margin fitting inside
+`shutdown_timeout_s`. Queries share device/bus scheduling with commands; use them on demand.
 
 ## L6 Limit Compensation
 
-These endpoints are created from command/telemetry capabilities; currently only
-L6 declares them. Protocol `0x38` carries six integers in `0..255`, ordered as
-`thumb_flex`, `thumb_abd`, `index`, `middle`, `ring`, `pinky`. The unit is `count`;
-the physical scale and direction are undocumented. ROS performs no conversion.
+`limit_compensations` uses six 0..255 raw counts, with unknown physical scale/direction.
+Use the command topic/client setter or reliable `set_limit_compensations` service;
+`get_limit_compensations` performs an active query. State is configuration, not measured angles.
+An exact six-byte echo is required for ACK; no implicit save is performed.
+See [L6 features](models.md#l6) and [service semantics](#services).
 
-`HandCommandClient.set_limit_compensations(values)` publishes the raw command
-topic after checking the verified capability and active driver. The returned
-`CommandPublication` means published, not accepted. As with other command
-topics, transport QoS is best-effort, keep-last(1); it does not guarantee every
-publication reaches SDK admission. Rejection before admission is reported in
-diagnostics and has no command handle/status. For low-frequency configuration
-that needs an explicit admission result, prefer the reliable
-`~/set_limit_compensations` service.
+## QoS and publication
 
-Once accepted, `CommandFamily.LIMIT_COMPENSATION` uses the SDK's shared bounded
-configuration/operation FIFO (`discrete_queue_capacity`), not latest-wins.
-Accepted pending configurations retain their order instead of being superseded
-by a newer value. A full queue returns `accepted=false`, `error_code=queue_full`
-from the setter service. `accepted=true` only means queued; observe
-`~/command/status` until `ACKNOWLEDGED` or `FAILED`. L6 requires an exact six-byte
-echo to acknowledge this write. No implicit `save_parameters` is performed.
-Service commands use `client_id=0`; correlate their statuses by the returned
-`command_id`. Topic/client commands retain `(client_id, user_sequence)`.
+| Interface | Reliability | Durability | Depth |
+| --- | --- | --- | --- |
+| Commands and state | Best effort | Volatile | 1 |
+| Command status | Reliable | Volatile | 32 |
+| Capabilities and identity | Reliable | Transient local | 1 |
 
-`~/get_limit_compensations` uses `GetRawValues(timeout_s)` on the bounded admin
-worker. On success, `state` is `HandTelemetry` including raw values, joint names,
-`raw_unit`, `raw_scale_note`, `unit_confidence` and `meta`. Failures retain SDK
-error codes, including timeout, protocol errors and `unsupported_firmware` after
-optional-read degradation. These read failures do not introduce a firmware
-version gate. Inactive services return `device_not_ready`.
+Use compatible subscription QoS (for CLI state reads, `--qos-reliability best_effort`
+can make the choice explicit). `~/` is relative to the driver node, normally `/linkerbot_hand`.
+State is emitted when sequence or validity metadata changes; repeated sequences can describe
+age/stale changes and do not count as new samples. Disabled polling does not erase existing cache
+or prevent command feedback. `publish_rate_hz=0` pauses ROS state publication.
 
-`~/state/limit_compensations` publishes changed cached configuration samples and
-validity, including successful queries and verified write responses; subscribing
-does not trigger device I/O or enable a new polling rate. Check `meta.valid`,
-`meta.stale`, `meta.origin` and connection generation before using the sample.
-The configuration is not a physical measurement (`device_measured=false`).
-
-The `GetRawValues` service requires rebuilding `linkerbot_hand_msgs` and its
-dependent driver. Adding its endpoints does not change service fields; the
-separate command-capability wire change described above requires rebuilding all
-capability consumers as well.
+SDK cache changes wake a dedicated publisher; the production ROS process uses a
+`MultiThreadedExecutor`. Capabilities are refreshed from SDK memory, without device queries.
+For control-loop readiness, status correlation and waiting rules, use
+[application integration](business_integration.md) and [client waits](client_waits.md).

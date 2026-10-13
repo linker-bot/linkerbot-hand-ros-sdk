@@ -1,14 +1,24 @@
-# 命令行与 Python 示例
+# 命令与 Python 示例
 
-示例默认驱动为 `/linkerbot_hand` 且 Lifecycle 为 active。先读取 capability，不要硬编码
-型号关节表：
+[English](../examples.md) | [使用手册](../../README_zh.md)
+
+先按[快速开始](getting_started.md)激活驱动。以下单手路径为 `/linkerbot_hand`；多手请替换为保存的 namespace。
+
+## 读取能力和反馈
 
 ```bash
 ros2 topic echo --once /linkerbot_hand/capabilities
-ros2 topic echo --once /linkerbot_hand/state/angles
+ros2 topic echo --once --qos-reliability best_effort /linkerbot_hand/state/angles
+ros2 topic echo /linkerbot_hand/command/status
 ```
 
-## Percent 角度
+由 verified capability 确认关节顺序、范围和支持命令。反馈需检查 `valid`、`stale`、
+`connection_generation` 及逐轴有效性；到位判据见[业务集成](business_integration.md)。
+
+## 发送一个 O6 角度目标
+
+以下命令会移动六轴 O6；确认空间和目标后执行。其他型号按 capability 提供数组，
+L6 还需满足[位置模式要求](ros_api.md#l6-力矩输出模式)。
 
 ```bash
 ros2 topic pub --once /linkerbot_hand/command/angles \
@@ -16,53 +26,17 @@ ros2 topic pub --once /linkerbot_hand/command/angles \
   '{client_id: 1, user_sequence: 1, representation: 1, values: [50, 50, 50, 50, 50, 50]}'
 ```
 
-屈伸轴 `0=弯曲，100=伸直`。侧摆和旋转轴查看 capability 的 zero/hundred label。
+`representation: 1` 是 percent，屈伸轴 `0=弯曲、100=伸直`；侧摆/旋转轴看端点标签。
+`representation: 2` 是协议 raw，必须符合逐轴范围及整数约束，不执行物理单位转换。
+同一发布者每次使用新的 `user_sequence`，不同发布者使用不同非零 `client_id`。
 
-## 协议 raw 角度
+`command/status` 是批消息，遍历 `statuses[]` 并按 `(client_id, user_sequence)` 匹配。
+无 ACK 的命令以 `DISPATCHED` 成功终止，有 ACK 的命令等待 `ACKNOWLEDGED`；
+`FAILED`、`SUPERSEDED` 都不是机械到位。SDK 接受前的拒绝还需查看 `/diagnostics`。
 
-```bash
-ros2 topic pub --once /linkerbot_hand/command/angles \
-  linkerbot_hand_msgs/msg/HandJointCommand \
-  '{client_id: 1, user_sequence: 2, representation: 2, values: [255, 128, 204, 178, 153, 0]}'
-```
+## 读取设置
 
-raw 不经过 percent、方向、LUT 或物理单位转换。值必须满足逐关节 capability 范围。
-
-## 速度与限制值
-
-仅在 capability 声明支持时发布对应 Topic：
-
-```bash
-ros2 topic pub --once /linkerbot_hand/command/speeds \
-  linkerbot_hand_msgs/msg/HandRawCommand \
-  '{client_id: 1, user_sequence: 3, raw: [20, 20, 20, 20, 20, 20]}'
-```
-
-电流上限、O30 转矩上限和实时转矩是不同接口：
-
-```bash
-ros2 topic pub --once /linkerbot_hand/command/current_limits \
-  linkerbot_hand_msgs/msg/HandRawCommand \
-  '{client_id: 1, user_sequence: 4, raw: [80, 80, 80, 80, 80, 80]}'
-```
-
-按 capability 的 command semantic 选择命令；`/command/torques` 的输出语义见
-[ROS API](ros_api.md)。
-
-## 命令状态
-
-```bash
-ros2 topic echo /linkerbot_hand/command/status
-```
-
-用 `(client_id, user_sequence)` 关联目标。无 ACK 型号在 `DISPATCHED` 成功终止；有协议 ACK 的型号等待
-`ACKNOWLEDGED`。Topic 类型是 `HandCommandStatusBatch`，直接订阅时逐条处理 `statuses[]`；
-机械到位由 `state/angles` 的新鲜反馈判断。
-
-## 按需读取配置与限制值
-
-先查看 capability 的 telemetry `read_mode` 和服务列表。驱动只为支持的通道创建服务，
-调用时应处于 active：
+驱动只创建 capability 支持的端点。例如 O6 主动查询配置速度：
 
 ```bash
 ros2 service list -t
@@ -70,74 +44,50 @@ ros2 service call /linkerbot_hand/get_configured_speeds \
   linkerbot_hand_msgs/srv/GetRawValues '{timeout_s: 0.5}'
 ```
 
-O6 的该服务会主动查询配置速度，L6/L20Lite 返回最近一次有效速度写回包，L30 返回本地命令缓存。
-读取写回包或命令缓存时不发送查询，没有有效样本时返回 `success=false`、`error_code=unsupported_operation`。
-成功后仍需检查 `state.meta.valid/stale/age_s/origin/connection_generation`；服务不会把旧
-缓存的时刻或 sequence 改成新的。原值在 `state.raw`，解释在
-`state.raw_unit/raw_scale_note/unit_confidence`。
-
-同一服务类型还用于 `get_configured_accelerations`、`get_current_limits`、
-`get_torques_limits`、`get_motion_times` 和 `get_limit_compensations`，可用性以 capability
-为准。O6/L20/L20Lite 使用 `current_hz` 和 `~/state/currents` 获取实时电流；L20 没有限制回读服务。
-O6/L20Lite 的 `get_current_limits` 读取有效完整写回包缓存，不发查询。O6 尚无有效写回包或恢复到新代次后尚未重新写入时，读取失败；缓存读取
-保留原采集时刻，回包值允许不同于写入目标，实时电流与限制状态不会相互覆盖。
-O30 `get_torques_limits` 读取独立的转矩限制。主动查询的样本也会经正常
-状态发布流程送到对应 `~/state/<semantic>`；仅订阅话题不会查询，也不会自动开启轮询。
-
-Python 业务节点可创建 `GetRawValues` client 并使用 `call_async()` 处理响应；不要在单线程
-executor 的 callback 内阻塞等待服务响应。自定义异步 callback 等待时，
-也应将服务 client 放入独立 callback group，避免同组互斥阻止响应处理。
+同名服务在不同型号上可能查询设备、读取设备写回包或读取本地命令缓存。
+`success=true` 不代表新鲜实测值；检查 `state.meta`、`raw_unit` 和 `raw_scale_note`。
+完整读写端点及缓存约定见 [ROS API](ros_api.md#按需读取配置与限制状态)，型号差异见[型号指南](models.md)。
+不要把配置速度、电流限制或转矩限制用于实时反馈闭环。
 
 ## 常驻 Python 客户端
 
-```python
-import rclpy
-from rclpy.node import Node
+业务节点持有一个 `HandCommandClient`，复用发布器和订阅；节点必须持续 spin。
+以下方法接入已有业务 Node，由业务提供已校验目标，在低频 ROS 异步回调中调用：
 
+```python
+from linkerbot_hand_msgs.msg import HandCommandStatus
 from linkerbot_hand_ros.client import HandCommandClient
 
 
-class Controller(Node):
-    def __init__(self) -> None:
-        super().__init__("hand_controller")
-        self.hand = HandCommandClient(self, "/linkerbot_hand")
-        self.timer = self.create_timer(0.01, self.tick)
-
-    def tick(self) -> None:
-        if not self.hand.is_ready("angles"):
-            return
-        publication = self.hand.set_percent_angles([50.0] * len(self.hand.joint_names))
-        self.get_logger().debug(f"published user_sequence={publication.user_sequence}")
-
-    def destroy_node(self) -> None:
-        self.hand.destroy()
-        super().destroy_node()
+def init_hand(self):
+    self.hand = HandCommandClient(self, "/linkerbot_hand")
 
 
-def main() -> None:
-    rclpy.init()
-    node = Controller()
-    try:
-        rclpy.spin(node)
-    finally:
-        node.destroy_node()
-        rclpy.try_shutdown()
+async def send_target(self, target_percent):
+    if not await self.hand.wait_until_ready_async(2.0):
+        return False
+    publication = self.hand.set_percent_angles(target_percent)
+    status = await self.hand.wait_for_terminal_status_async(
+        publication.user_sequence, 1.0
+    )
+    return status is not None and status.stage in (
+        HandCommandStatus.STAGE_DISPATCHED,
+        HandCommandStatus.STAGE_ACKNOWLEDGED,
+    )
 ```
 
-`set_percent_angles()` 表示发布成功，不表示 SDK 已接受。SDK stage 从 status topic 到达。
-高频 callback 使用状态机；低频异步 callback 可使用
-`await client.wait_for_terminal_status_async(sequence, timeout_s)`。同步等待需要另外的可用
-executor 线程，不能在单线程 executor callback 中使用。见[等待契约](../client_waits.md)。
+返回值只表示协议发送成功；业务仍需独立判断机械到位。参数错误会抛出异常，按业务错误策略处理。
+销毁 Node 前调用 `self.hand.destroy()`。高频 timer 用 `is_ready("angles")`、发布和后续 tick 的
+`get_status(sequence)` 组成非阻塞状态机。不要在单线程 executor 回调中同步等待，
+也不要嵌套 spin；详见[客户端等待](client_waits.md)。
 
-仓库内置：
+随包工具：`state_monitor` 观察状态，`angle_command --values ...` 发送指定角度，
+`angle_controller` 用于常驻控制；参数用各工具的 `--help` 查看。
 
-```bash
-ros2 run linkerbot_hand_ros angle_command --values 50 50 50 50 50 50
-ros2 run linkerbot_hand_ros angle_controller
-ros2 run linkerbot_hand_ros state_monitor
-```
+## 触觉、管理与恢复
 
-## 主动设备信息和恢复
+按[触觉指南](force.md)开启所需轮询；六种矩阵型号订阅 `state/tactile`，O30 订阅
+`state/tactile_sensors`，不能把单指、cell 或 CAN 分片计为完整采样。
 
 ```bash
 ros2 service call /linkerbot_hand/get_device_info \
@@ -146,42 +96,6 @@ ros2 service call /linkerbot_hand/recover \
   linkerbot_hand_msgs/srv/Recover '{timeout_s: 1.0}'
 ```
 
-恢复不会重放旧目标。成功后等待新 `connection_generation` 的有效角度，再显式发送目标。
-
-## 堵转配置
-
-先读取，不猜单位或安全范围：
-
-```bash
-ros2 service call /linkerbot_hand/get_stall_protection \
-  linkerbot_hand_msgs/srv/GetStallProtection '{timeout_s: 0.5}'
-```
-
-未确认安全范围前，实机只允许读取当前值并原样写回验证通信：
-
-```bash
-ros2 service call /linkerbot_hand/set_stall_thresholds \
-  linkerbot_hand_msgs/srv/SetRawValues \
-  '{user_sequence: 10, raw: [<按 capability 通道顺序填写>]}'
-```
-
-如果 capability 的 `operations.save_parameters=true`，需要持久化时再调用：
-
-```bash
-ros2 service call /linkerbot_hand/save_parameters \
-  linkerbot_hand_msgs/srv/SubmitCommand '{}'
-```
-
-两个 service 的成功响应都只表示 SDK 接受；O6/L6 的配置写和保存操作应继续观察
-`/command/status`，以各自 `command_id` 确认最终 `ACKNOWLEDGED`。不要在未确认当前值、安全
-范围和恢复方法时写任意堵转参数，也不要把 O6 的 `C5/C6` 顺序套用到 L6。
-
-## 完整触觉
-
-```bash
-ros2 topic echo /linkerbot_hand/state/tactile
-ros2 topic hz /linkerbot_hand/state/tactile
-```
-
-每条 `HandTactileState` 是一次完整多指事务。频率按整个消息计数，不把矩阵 cell、CAN 分片
-或单个手指当作独立样本。
+恢复前停止业务目标；成功后等待新连接代次的有效反馈，再显式产生新目标。
+堵转、增益、清错和保存参数的能力及使用边界见[型号指南](models.md)；
+服务接受写命令后，按返回的 `command_id` 追踪协议终态。

@@ -6,8 +6,6 @@
   <maintainer email="1849346915@qq.com">zhuzhixiang</maintainer>
   <license>Apache-2.0</license>
 
-  <buildtool_depend>ament_python</buildtool_depend>
-
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>builtin_interfaces</exec_depend>
   <exec_depend>launch</exec_depend>

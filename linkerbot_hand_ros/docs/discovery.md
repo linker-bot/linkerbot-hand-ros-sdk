@@ -1,6 +1,8 @@
 # Automatic discovery and reusable deployment
 
-Manual launch and old ROS parameter YAML remain available. Discovery reads
+English | [简体中文](zh/discovery.md) | [Manual](../README.md)
+
+Use manual launch, ROS parameter YAML or automatic discovery. Discovery reads
 identity through the source Hand SDK, closes probes, then constructs each driver
 through its candidate factory. It does not change host CAN settings or send extra
 motion, enable, fault-clear or calibration commands. Use one hand per channel.
@@ -8,7 +10,7 @@ motion, enable, fault-clear or calibration commands. Use one hand per channel.
 ## Three startup modes
 
 ```bash
-# Manual single hand (existing)
+# Manual single hand
 ros2 launch linkerbot_hand_ros hand.launch.py \
   model:=l6 side:=left \
   transport_json:='{"backend":"socketcan","channel":"can0"}'
@@ -56,6 +58,7 @@ Discovery startup failures return a nonzero launch exit status for scripts.
 ros2 launch linkerbot_hand_ros multi_hand.launch.py \
   discover:=true channels:=can0,can1 output:=./hands-lab.yaml
 
+# Deactivate, cleanup and exit the first launch before reusing the file.
 ros2 launch linkerbot_hand_ros multi_hand.launch.py config:=./hands-lab.yaml
 ```
 
@@ -65,21 +68,21 @@ never overwrites a file, including a creation race. A required write failure
 prevents activation. Saving and activation are reported separately; the saved
 configuration remains available if later activation fails.
 
-`config` accepts old ROS parameter files and generated discovery deployments.
-New files use `schema: linkerbot_hand_ros.discovery`, `version: 1`, `autostart`,
+`config` accepts ROS parameter files and generated discovery deployments.
+Discovery deployments use `schema: linkerbot_hand_ros.discovery`, `version: 1`, `autostart`,
 `discovery` settings and a `hands` list of `namespace`, `match`, `parameters`.
 Unknown versions/keys, duplicate keys/namespaces/channels fail validation.
 These deployments must be loaded through launch, not ROS `--params-file`.
 
 SDK aliases provide initial namespaces such as `/l6l`. Edit the saved namespace
-for a business role. New multi-hand discovery puts aliases under the container
+for a business role. Multi-hand discovery puts aliases under the container
 namespace: `PushROSNamespace("/robot")` produces `/robot/l6l` and `/robot/o6r`.
 These absolute paths are saved once; loading under another parent keeps them.
 Edit or regenerate the deployment to relocate roles. Internal node names and
 namespaces are protected from process-wide `__node`/`__ns` remaps while global
 parameters (including `use_sim_time`) and topic remappings remain available.
-Old ROS parameter files evaluate launch substitutions before ROS validation;
-new discovery deployments use their static schema.
+ROS parameter files evaluate launch substitutions before ROS validation;
+discovery deployments use their static schema.
 
 Loading rescans saved resources and uniquely matches only
 saved roles; new ambient devices do not join and alias renumbering does not
@@ -94,7 +97,7 @@ L30 physical side is shown while constructor side remains not applicable.
 Generated selectors do not lock firmware versions; stop/cleanup before upgrades
 and start a new discovery session.
 
-New discovery defaults to `autostart=true`; file startup preserves its saved
+Discovery defaults to `autostart=true`; file startup preserves its saved
 value unless explicitly overridden. `autostart:=false` still scans/saves, then
 keeps unconfigured lifecycle nodes running for external management. It does not
 open runtime devices or exit after scanning. Discovery/saving is not control
@@ -130,7 +133,10 @@ MiniCANFD on Linux; PCAN (classic CAN/CAN FD), MiniCANFD and SLCAN (CAN FD) on
 Windows. Explicit backends only filter these sources. Libraries, permissions, configured interfaces
 and adapter firmware must be available. The scan budget is soft; vendor calls
 and required cleanup can take longer. No runtime rescan, hotplug substitution
-or interactive prompt is provided. Automated tests use source SDKs/in-memory
-peers; Windows and adapter/hand hardware require separate acceptance.
+or interactive prompt is provided. The documented ROS installation targets Ubuntu/Jazzy; Windows adapter support in the SDK
+does not establish a validated Windows ROS deployment.
+
+Without explicit MiniCANFD channel filters, Linux probes channel 0 then conditionally channel 1;
+see [automatic selection rules](connection.md#minicanfd). Fixed templates deliberately override this scope.
 
 Configuration templates and fixed deployments: [examples](discovery_examples.md). Locate failures by backend/interface/endpoint/role using [discovery troubleshooting](discovery_troubleshooting.md).

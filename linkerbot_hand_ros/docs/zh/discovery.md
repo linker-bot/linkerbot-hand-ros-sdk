@@ -1,13 +1,15 @@
 # 自动发现并复用启动配置
 
+[English](../discovery.md) | [使用手册](../../README_zh.md)
+
 启动支持手工 launch、ROS 参数 YAML 和自动发现。发现模式通过 Hand SDK 读取身份、关闭探测
 连接，再用候选工厂构造节点。它不修改宿主 CAN 设置，不额外发送运动、使能、清错或
-标定命令。当前维护范围仍是一条物理 CAN/CAN FD 通道一只手。
+标定命令。使用范围为一条物理 CAN/CAN FD 通道一只手。
 
 ## 三种启动方式
 
 ```bash
-# 手工启动（已有）
+# 手工启动
 ros2 launch linkerbot_hand_ros hand.launch.py \
   model:=l6 side:=left \
   transport_json:='{"backend":"socketcan","channel":"can0"}'
@@ -28,7 +30,7 @@ ros2 launch linkerbot_hand_ros hand.launch.py discover:=true channels:=can0
 `channels` 用逗号分隔 SDK 报告接口名称，例如 `can0`、`pcan:PCAN_USBBUS1`、
 `slcan:COM5`、`minicanfd:0:0`。指定接口缺失不会回退到其他接口。
 自动模式不能同时指定手工 `model`、`side`、`transport_json`；
-单手原有运行参数（如 `angles_hz:=50`）和 `namespace` 仍可使用。
+单手运行参数（如 `angles_hz:=50`）和 `namespace` 仍可使用。
 单手遵循 ROS namespace 规则：相对路径接在外层 `PushROSNamespace` 下，绝对路径保持固定。
 
 多手至少需要一只已验证设备。摘要显示接口、型号、物理侧别、后端，再给出 namespace。
@@ -52,6 +54,7 @@ PARTIAL 和后端失败单独显示。所选通道有多个响应端点、绑定
 ros2 launch linkerbot_hand_ros multi_hand.launch.py \
   discover:=true channels:=can0,can1 output:=./hands-lab.yaml
 
+# 先失活、cleanup 并退出第一个 launch，再复用文件。
 ros2 launch linkerbot_hand_ros multi_hand.launch.py config:=./hands-lab.yaml
 ```
 
@@ -114,8 +117,10 @@ PCAN/SLCAN 支持原生 `channels`、`bitrate`、`data_bitrate`、
 
 后端省略时沿用 SDK 平台默认：Linux 为 SocketCAN（经典 CAN/CAN FD）与 MiniCANFD；Windows 为
 PCAN（经典 CAN/CAN FD）、MiniCANFD、SLCAN（CAN FD）。库、权限、已配置接口和适配器固件必须可用。
-扫描预算不是硬截止，厂商调用和必要清理可能更久；一期不提供运行中重扫、
-热插拔替换或交互输入。软件测试使用源码 SDK/内存协议替身，Windows、适配器及
-各型号实机仍需独立验收。
+扫描预算不是硬截止，厂商调用和必要清理可能更久；不提供运行中重扫、
+热插拔替换或交互输入。本文 ROS 安装面向 Ubuntu/Jazzy，SDK 支持 Windows 适配器不代表 Windows ROS 已验证。
 
-可复制的适配器设置和单手/双手部署见[配置示例](discovery_examples.md)；按后端、接口、端点和角色定位失败见[故障排查](troubleshooting.md#自动发现与部署加载故障)。
+未显式设置 MiniCANFD 通道筛选时，Linux 自动探测 0，再按条件回退 1；
+详见[自动选择规则](connection.md#minicanfd)。固定模板会覆盖该自动范围。
+
+可复制的适配器设置和单手/双手部署见[配置示例](discovery_examples.md)；按后端、接口、端点和角色定位失败见[故障排查](discovery_troubleshooting.md)。

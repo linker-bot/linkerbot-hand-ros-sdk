@@ -1,167 +1,73 @@
 # 业务节点集成
 
-## 唯一集成路径
+[English](../business_integration.md) | [使用手册](../../README_zh.md)
 
-业务节点只依赖类型化 ROS interface，不导入型号类、不维护 `MODEL_SPECS`，也不主动发送
-设备查询。推荐依赖关系：
+业务节点通过 `HandCommandClient` 与 `linkerbot_hand_msgs` 接入驱动；驱动的 `HandDevice`
+负责设备 I/O。业务无需打开 CAN、导入 SDK 型号类或维护另一份型号范围表。
 
-```text
-业务控制器
-  -> HandCommandClient + linkerbot_hand_msgs
-  -> linkerbot_hand Lifecycle 驱动
-  -> HandDevice (main) polling/scheduler/cache
-  -> linkerbot-transport
-```
+## 就绪与启动
 
-业务启动时订阅 transient-local `capabilities`，从中确定：
+1. configure 驱动，读取 declared capability。
+2. activate，等待 `identity.verified=true`、设备信息及 operational diagnostics。
+3. 等待当前 `connection_generation` 的有效角度 baseline，确认 fault 与业务安全条件。
+4. 启用命令产生逻辑。
 
-- verified 型号、固件、side 和 sensor variant；
-- 关节名称、顺序和数量；
-- percent endpoint 含义、协议 raw 范围和整数约束；
-- 支持的命令、telemetry、管理操作与 ACK 能力。
-
-不要在业务包中复制型号范围表。activate 后 capability 会从 declared 更新为 verified，只有
-`identity.verified=true` 才允许进入运动状态机。`is_ready()` 还要求指定驱动的
-`get_state` 返回 active 且未过期，并核对命令订阅端点属于该驱动。第三方订阅数量不能代表
-驱动激活。状态每 0.2 秒异步查询，证据从请求发出起最多有效 1 秒；生命周期切换会立即使
-客户端收到的旧证据失效。就绪不等于设备健康或机械安全，仍需当前 generation 的状态反馈。
+按 capability 获取关节名称/顺序、percent 端点、raw 范围、命令和 telemetry 支持性。
+客户端 `is_ready("angles")` 还核对指定驱动的 active 状态及命令订阅归属；
+它不能替代设备健康和机械安全检查。就绪有效期与 executor 约定见[客户端等待](client_waits.md)。
 
 ## 控制循环
 
-`HandCommandClient` 复用 publisher、capability 和 status subscription：
-
-```python
-from linkerbot_hand_ros.client import HandCommandClient
-
-self.hand = HandCommandClient(self, "/linkerbot_hand")
-
-if self.hand.is_ready("angles"):
-    publication = self.hand.set_percent_angles(target_percent)
-    self.pending_command = (publication.client_id, publication.user_sequence)
-```
-
-这一步只表示 DDS publish 完成。命令状态以 `HandCommandStatusBatch` 从 `/command/status`
-异步到达；直接订阅时必须遍历 `statuses[]`，`HandCommandClient` 已代为完成批消息展开和
-`client_id` 过滤。高频 timer/callback 使用非阻塞状态机。低频异步回调可以
-`await wait_until_ready_async()` 或 `await wait_for_terminal_status_async()`，即使使用
-单线程 executor，客户端的独立回调组也能接收所等待的消息。同步等待需要其他可用的 executor
-线程；不能在单线程 executor 回调中同步等待。完整契约见[客户端等待说明](../client_waits.md)。
-状态机流程：
-
 ```text
-publish target
-  -> wait ACCEPTED/DISPATCHED/ACK asynchronously
-  -> observe current-generation angle samples
-  -> apply tolerance + settle duration
-  -> declare mechanical arrival
+发布目标 → 异步观察 SDK 接受/发送/协议确认 → 检查新鲜角度 → 误差与稳定时间满足 → 到位
 ```
 
-连续角度使用 best-effort depth 1 和 SDK latest-wins。控制器应按最新目标设计，不能假设每个
-历史 setpoint 都会发送。`SUPERSEDED` 表示旧目标在 transport claim 前确认未发送。
+连续命令使用 best-effort、depth 1 和 latest-wins；业务按最新目标设计，不能假设历史
+setpoint 全部下发。`SUPERSEDED` 表示目标在 transport claim 前确认未发送。
+高频控制用非阻塞状态机；低频异步调用见[示例](examples.md#常驻-python-客户端)。
 
-## 状态与到位判断
+| 阶段 | 能证明什么 |
+| --- | --- |
+| `CommandPublication` | 消息已交给本地 DDS publisher |
+| `driver_received_stamp` | 驱动 callback 已收到消息 |
+| `ACCEPTED` | SDK 校验通过并接受调度 |
+| `DISPATCHED` | 全部请求帧 send 成功 |
+| `ACKNOWLEDGED` | 支持 ACK 的协议明确确认 |
+| 到位 | 当前连接代次的新鲜反馈满足业务判据 |
 
-订阅 `HandJointState` 后至少检查：
+Topic 状态用 `(client_id, user_sequence)` 关联，服务写命令用返回的 `command_id`。
+直接订阅 `HandCommandStatusBatch` 时遍历 `statuses[]`；客户端已展开批消息并过滤自己的 `client_id`。
+状态 `transitions[]` 保存阶段历史，可结合 publisher/driver 时间戳分析延迟。
 
-1. `meta.valid=true` 且 `meta.stale=false`。
-2. `meta.connection_generation` 等于当前驱动 generation。
-3. `joint_names` 与当前 verified capability 完全一致。
-4. 需要 percent 的轴其 `percent_valid=true`；需要物理弧度的轴其
-   `physical_rad_valid=true`。
-5. `meta.sequence` 相对上一样本增加，不能把重复 ROS callback 当作新设备数据。
+## 反馈与到位
 
-驱动本身只在 sequence 或有效性签名变化时发布，因此正常情况下不会重复同一缓存。业务仍应
-保存 sequence，用于检测乱序、代次切换和长时间无新样本。
+收到 `HandJointState` 后检查：
 
-以下阶段严格区分：
+- `meta.valid=true`、`meta.stale=false`，代次与当前连接一致。
+- `joint_names` 与 verified capability 完全一致。
+- 使用 percent/弧度的轴分别具有 `percent_valid`/`physical_rad_valid`。
+- 以 `meta.sequence` 判断新设备样本；仅有效性变化也可能发布相同 sequence。
 
-| 层次 | 观察方式 | 能证明什么 |
-| --- | --- | --- |
-| ROS 发布 | `CommandPublication` | 业务消息已交给本地 DDS publisher |
-| 驱动收到 | `HandCommandStatus.driver_received_stamp` | 驱动 callback 已收到该发布者的消息 |
-| SDK 接受 | `HandCommandStatus.ACCEPTED` | 参数有效并进入 SDK 调度器 |
-| transport 发送 | `DISPATCHED` | 全部请求帧实际 send 成功 |
-| 设备协议确认 | `ACKNOWLEDGED` | 协议明确 ACK，只有支持型号才有 |
-| 机械到位 | 新鲜角度反馈窗口 | 误差和稳定时间满足业务判据 |
+只对新鲜有效样本计算误差和稳定时间；丢样、过期、断连或换代次时重置到位窗口。
+raw、percent、物理弧度是独立表示，不能互相冒充；配置速度、限制值和实时测量的区别见[型号指南](models.md)。
 
-`HandCommandClient` 为每个实例生成非零 `client_id`。业务应使用
-`(client_id, user_sequence)` 作为关联键，不能只按序号匹配其他发布者的状态。状态中的
-`publisher_stamp`、`driver_received_stamp` 和完整 `transitions[]` 可分别计算 ROS admission、
-SDK admission 和 transport dispatch 延迟。
+## 错误与恢复
 
-## Percent、raw 和物理角度
+按稳定 `error_code` 分支，不解析中英文 message。`validation` 修正输入，
+`unsupported_operation` 按能力禁用功能，`queue_full` 降低提交频率，
+`identity_mismatch`、反复 transport 错误和设备 fault 应停止业务控制并诊断。
+Topic 在 SDK 接受前的拒绝可能只出现在 diagnostics，不能只等待 status。
 
-- `set_percent_angles()` 对应 `HandJointCommand.REPRESENTATION_PERCENT`。
-- `set_angles()` 对应 `REPRESENTATION_RAW`，是精确协议值。
-- `HandJointState` 同时提供 raw、percent 和可选 physical radians，有独立 validity mask。
+断线、恢复或代次改变时停止目标，清空 pending 和到位窗口；不要排队等待补发。
+恢复重新校验身份和 baseline 后，再确认 fault 与安全条件并显式产生新目标。
+恢复不重放目标，也不自动清 fault、enable 或 calibrate。
 
-普通 `set_*` 和 telemetry `raw` 不做 RPM、mA 或 N.m 转换。configured speed 不等于
-measured speed，current limit 不等于 torque。L6 的速度设置快照只能作为
-`configured_speeds`，不能用于实际速度闭环。
+## 停止与多设备
 
-## 错误处理
+先停止业务目标，再 deactivate 驱动，最后 cleanup/shutdown 释放连接。
+驱动失活不会隐式执行保持、全开或握拳；业务需要的停止动作应有明确目标、反馈与超时。
+关闭失败需处理并确认资源释放，不能立即在同接口启动另一驱动。
 
-服务响应和命令 status 提供稳定 `error_code`，例如：
-
-- `validation`
-- `unsupported_operation`
-- `unsupported_firmware`
-- `identity_mismatch`
-- `device_not_ready`
-- `transport`
-- `protocol`
-- `timeout`
-- `device_fault`
-- `queue_full`
-- `polling_plan`
-- `closed`
-- `lifecycle`
-
-业务代码按 code 分支，不解析中英文 message。`unsupported_operation` 是能力差异，不应一律
-升级为系统故障；`identity_mismatch`、重复 transport 错误和设备 fault 应进入安全状态。
-
-## Lifecycle 协调
-
-启动顺序：
-
-1. configure 驱动并读取 declared capability。
-2. activate，等待 verified capability、device info、diagnostics operational。
-3. 等待当前 generation 的有效角度 baseline。
-4. 启用业务命令发布。
-
-停止顺序：
-
-1. 业务节点停止产生新目标。
-2. deactivate 驱动，撤销命令入口并停止 polling。
-3. cleanup 或 shutdown 关闭连接。
-
-通用驱动不会在 deactivate 自动发送保持、全开或握拳。需要停止动作时由上层安全控制器定义
-明确目标和超时，不能依赖生命周期隐式动作。
-
-## 断线和恢复
-
-看到 disconnected/reconnecting 或 generation 改变时：
-
-- 立即停止提交目标，清空 pending 业务状态和到位稳定窗口；
-- 不缓存“等恢复后发送”的运动目标；
-- 等待 SDK 重新验证身份和固件，读取 baseline；
-- 检查 fault 和安全条件；
-- 由业务显式提交新目标。
-
-SDK 禁止重放断线前目标，也不会自动清 fault、enable 或 calibrate。业务层同样不能把旧
-`(client_id, user_sequence)` 的 status 用于新 generation。
-
-## 多设备部署
-
-每个设备使用独立 namespace，例如 `/left/linkerbot_hand` 和
-`/right/linkerbot_hand`。使用 `multi_hand.launch.py` 和一个参数文件把这些 Lifecycle 节点
-放入同一进程，统一启动和失败回滚。当前维护范围为一条物理 CAN/CAN FD 通道一只手，
-各手使用独立接口；随包示例将 L6 左手接到 `can0`、O6 右手接到 `can1`。
-相同物理 key 的 SDK 资源共享机制不代表支持同通道多手，namespace 也不能隔离总线报文；
-不同 channel 使用独立 transport runtime。独立 `hand.launch.py` 进程不提供组生命周期管理。
-
-容器自动启动采用全量 configure 后全量 activate，任何失败都会逆序回滚，业务不会看到容器
-留下部分 active 设备。具体参数文件见[Lifecycle 与参数配置](configuration.md#多设备)。
-
-业务层分别持有两个 `HandCommandClient`，按各自 capability 和 generation 管理，不假设两种
-型号具有相同关节数量或相同 telemetry。
+每只手使用独立物理通道、namespace、客户端及反馈状态机。
+`multi_hand.launch.py` 提供组启动与失败回滚，参数见[多设备配置](configuration.md#多设备)。
+namespace 不能隔离同一总线上的设备报文，也不能保证不同型号有相同关节数或能力。

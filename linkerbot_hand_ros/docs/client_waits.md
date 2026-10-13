@@ -1,5 +1,7 @@
 # Waiting for a ROS hand client
 
+English | [简体中文](zh/client_waits.md) | [Manual](../README.md)
+
 Readiness requires verified capability metadata, a fresh `get_state` response
 reporting **active** from the specified driver, and that driver's command
 subscription in the ROS graph. A recorder or another observer on the command
@@ -51,3 +53,5 @@ Cancelling a returned Future cancels only that wait. Destroy the client before
 destroying its node; pending waits then fail with `RuntimeError`. Neither a
 timeout nor cancellation retracts a published command. A terminal SDK status
 describes protocol progress, not mechanical target arrival.
+
+Inspect the returned stage for failure or supersession; receiving a terminal status alone does not prove success.

@@ -1,5 +1,7 @@
 # 统一触觉字段
 
+[English](../force.md) · [使用手册](../../README_zh.md)
+
 本指南描述最新 Hand SDK 和 ROS `main` 的统一触觉接口。能力消息 schema 为 `1.5`；
 消息包、ROS 驱动和订阅方使用一致的接口定义构建。
 
@@ -36,6 +38,11 @@ O30 不会仅凭协议名称声明所有字段已安装。查询 descriptor 前
 带 FnS 的布局可同时取得 fn/fns，TASHAN_GATHER 则返回 fn/ft/fd/px。
 矩阵行列及 descriptor 详细布局仍分别从 `state/tactile`、
 `state/tactile_sensors` 取得，不能只凭数组长度猜测二维形状。
+
+`HandTactileSensor` 保留最大行列、请求行列、`selected_sensor`、`available`、位置模式和矩形填充信息。
+这些尺寸不决定 descriptor 数组的形状或顺序；使用 `descriptor`、`fields` 和 `raw_bytes` 解读。
+缺失传感器保留身份及空字段，不能当作零力测量。六种非 O30 型号采用 `tactile_matrix`，
+O30 采用 `tactile_descriptor`，以 force telemetry 的 `payload_projection` 为准。
 
 ## O30 TASHAN_GATHER
 

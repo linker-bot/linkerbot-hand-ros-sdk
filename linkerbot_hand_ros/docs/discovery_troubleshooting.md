@@ -1,5 +1,7 @@
 # Discovery troubleshooting
 
+English | [简体中文](zh/discovery_troubleshooting.md) | [Troubleshooting](troubleshooting.md)
+
 First check platform scope: Linux uses SocketCAN (classic CAN/CAN FD) and MiniCANFD; Windows uses PCAN (classic CAN/CAN FD), MiniCANFD and SLCAN (CAN FD). `backends` does not enable sources from another platform. For `backend ... is unavailable on this platform`, use a supported template. A Linux adapter exposed as a SocketCAN network interface uses SocketCAN; serial SLCAN mode is outside this entry point.
 
 Keep the scan summary, failure lines and final lifecycle error from one attempt. Read `operation` (SDK operation), `backend`, `channel`/`native_channel`, `protocol`, role namespace and configuration path. `stage` names the container phase and `cause` retains the original exception. Missing SDK fields are not inferred; `backend=selection` denotes filtering, not an adapter. See [configuration examples](discovery_examples.md).
@@ -47,9 +49,15 @@ Resolve access through the host's device-permission mechanism rather than granti
 
 Deactivation stops commands and polling but retains the lease until cleanup. Orderly deactivate, cleanup and exit your own old nodes before scanning; MiniCANFD enumeration also requires closing this process's connections to the same vendor library. Other applications must release their own resources; do not kill unrelated processes. There is no runtime rescan API.
 
-## `layout`: unknown Linux MiniCANFD layout
+## MiniCANFD channel selection
 
-Provide confirmed `linux_channels` (device index to channel indices), never guess channel counts from device counts. Windows omits Linux layouts: DLL devNum is device_index, channel_index is 0. Use the template for the actual platform.
+Without global `channels` or `minicanfd.linux_channels`, Linux probes channel 0,
+then tries channel 1 only if no identity candidate was found and probe cleanup succeeded.
+If channel 0 is not FD, it is skipped and channel 1 is checked. Any identity candidate on channel 0 stops
+fallback. Explicit channels disable automatic fallback. Supply a confirmed
+`linux_channels` layout only to fix the scope; device count does not imply channel count.
+Windows uses DLL devNum as device_index and channel_index 0, without Linux layouts.
+See [connection details](connection.md#minicanfd).
 
 ## `unsupported_protocol` or invalid FD timing
 
@@ -67,4 +75,4 @@ Diagnostics retain the original interface/protocol and each cleanup cause. Unrel
 
 Activation/recovery refuse the changed identity. Inspect node/namespace, interface, request/response IDs, L30 Node ID and cause. Saved-role errors also show the expected `match`. Check hand/wiring/firmware changes or edited constraints, then orderly cleanup and explicitly rediscover/reconfirm the role. Do not remove identity conditions to accept the wrong device. Generate a new output path and retain the original for comparison.
 
-Templates without serial identities constrain model/side/interface/endpoint only; they do not guarantee permanent physical identity. Prefer deployments generated from the installation. Hardware acceptance remains separate.
+Templates without serial identities constrain model/side/interface/endpoint only; they do not guarantee permanent physical identity. Prefer deployments generated from the installation. Verify bindings against the connected hardware.

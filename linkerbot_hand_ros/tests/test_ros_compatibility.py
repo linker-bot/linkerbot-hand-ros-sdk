@@ -247,22 +247,22 @@ def test_package_declares_direct_runtime_dependencies() -> None:
 
 
 def test_package_declares_ament_python_only_as_build_type() -> None:
-    package = ET.parse(PACKAGE_ROOT / "package.xml").getroot()
-    buildtool_dependencies = {
-        dependency.text for dependency in package.findall("buildtool_depend")
-    }
+    for package_name in ("linkerbot_hand_ros", "linkerbot_hand_gui"):
+        manifest = PACKAGE_ROOT.parent / package_name / "package.xml"
+        package = ET.parse(manifest).getroot()
+        buildtool_dependencies = {
+            dependency.text for dependency in package.findall("buildtool_depend")
+        }
 
-    assert "ament_python" not in buildtool_dependencies
-    assert package.findtext("./export/build_type") == "ament_python"
+        assert "ament_python" not in buildtool_dependencies, manifest
+        assert package.findtext("./export/build_type") == "ament_python", manifest
 
 
 def test_rosdep_instructions_fail_on_unresolved_dependencies() -> None:
-    documentation = (
-        PACKAGE_ROOT.parent / "README.md",
-        PACKAGE_ROOT.parent / "README_zh.md",
-        PACKAGE_ROOT / "README.md",
-        PACKAGE_ROOT / "README_zh.md",
-        PACKAGE_ROOT / "docs/zh/getting_started.md",
+    documentation = tuple(
+        PACKAGE_ROOT / "docs" / language / name
+        for language in ("", "zh")
+        for name in ("getting_started.md", "update.md")
     )
 
     for path in documentation:
@@ -277,22 +277,20 @@ def test_rosdep_instructions_fail_on_unresolved_dependencies() -> None:
 
 
 def test_sdk_install_instructions_use_main_sources() -> None:
-    documentation = (
-        PACKAGE_ROOT.parent / "README.md",
-        PACKAGE_ROOT.parent / "README_zh.md",
-        PACKAGE_ROOT / "README.md",
-        PACKAGE_ROOT / "README_zh.md",
-        PACKAGE_ROOT / "docs/zh/getting_started.md",
-        PACKAGE_ROOT / "docs/zh/troubleshooting.md",
-        PACKAGE_ROOT / "docs/zh/frequency_benchmark.md",
+    documentation = tuple(
+        PACKAGE_ROOT / "docs" / language / "getting_started.md"
+        for language in ("", "zh")
     )
 
     for path in documentation:
         source = path.read_text(encoding="utf-8")
         commands = source.replace("\\\n", "")
-        for package in ("linkerbot-transport", "linkerbot-hand"):
+        for repository, directory in (
+            ("linkerbot-transport", "linkerbot-transport"),
+            ("linkerbot-hand-python", "linkerbot-hand"),
+        ):
             assert re.search(
-                rf"git clone --branch main --depth 1\s+https://\S+/{package}\.git",
+                rf"git clone --branch main --depth 1\s+https://\S+/{repository}\.git\s+{directory}",
                 commands,
             ), path
         assert "-e './linkerbot-transport[all]' -e ./linkerbot-hand" in source

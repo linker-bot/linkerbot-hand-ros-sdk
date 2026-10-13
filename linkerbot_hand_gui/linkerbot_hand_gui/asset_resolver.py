@@ -93,10 +93,10 @@ def load_o6_urdf(assets: O6Assets, *, require_complete_visual: bool = False) -> 
     Args:
         assets: Resolved O6 asset directory and URDF.
         require_complete_visual: Require every visual mesh to be a complete
-            official GLB.  This is used by the standalone preview so one
-            missing Git LFS object cannot silently turn part of the model
-            into an uncoloured OBJ fallback.  Collision meshes retain the
-            historical fallback behaviour when this is false.
+            official GLB.  Preview and live launch modes leave this false:
+            missing or incomplete GLB files fall back to a complete sibling
+            OBJ, then a collision OBJ when available.  Strict mode rejects
+            incomplete visual meshes but still allows collision fallbacks.
 
     Raises:
         FileNotFoundError: If strict visual mode finds a missing, partial, or

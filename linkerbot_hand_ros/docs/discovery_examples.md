@@ -1,5 +1,7 @@
 # Discovery configuration examples
 
+English | [简体中文](zh/discovery_examples.md) | [Manual](../README.md)
+
 The driver installs these templates under `share/linkerbot_hand_ros/config`; sources are in this package's `config` directory. Adjust ports, timing, firmware and native libraries for your hardware. Passing software validation does not constitute adapter acceptance.
 
 ## Platform scope
@@ -70,6 +72,6 @@ ros2 launch linkerbot_hand_ros multi_hand.launch.py config:=./hands-lab.yaml
 
 Generated files retain available identity constraints, observed endpoints, namespaces and per-hand parameters. New devices are not added and existing output is not overwritten. For another backend, generate using its settings template, e.g. `discover:=true discovery_config:=/actual/path/discovery-pcan-fd.yaml output:=./hands-pcan.yaml`.
 
-## Validation boundaries
-
-All eight templates pass SDK configuration/schema validation. Each deployment, including those generated from advanced settings, is loaded in a new process, matched to in-memory candidates and configured without loading native libraries or sending hardware frames. Actual ports, library architecture, drivers, firmware, bus timing and Windows ROS support require hardware acceptance. See [discovery troubleshooting](discovery_troubleshooting.md).
+The templates fix explicit channels. To use automatic MiniCANFD enumeration, omit
+global channel filters and Linux channel layouts as described in [connection](connection.md#minicanfd).
+For startup failures see [discovery troubleshooting](discovery_troubleshooting.md).

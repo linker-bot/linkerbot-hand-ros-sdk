@@ -1,19 +1,22 @@
-# main 源码检查
+# 本地开发检查
 
-日常安装使用 Transport、Hand SDK 和 ROS 仓库的最新 `main` 分支，步骤见
-[安装说明](../README_zh.md)。Python 包元数据保留 Hand SDK 依赖名称，不固定其版本；
-请先按文档安装两个依赖仓库的源码，再用 colcon 构建 ROS package。
+先按[安装](../linkerbot_hand_ros/docs/zh/getting_started.md)或[更新](../linkerbot_hand_ros/docs/zh/update.md)
+准备 Transport、Hand Python 和 ROS 的最新 `main`，构建消息包及所有消费者。
+依赖源码更新后重新构建，不从另一 Python 环境借用已生成的 ROSIDL 类型。
 
-变更记录通过 Git 历史及对应 PR 查看。
-
-## 本地检查
-
-需要先配置 ROS 2 Jazzy、安装最新依赖源码并构建消息，然后运行：
+在仓库根目录运行：
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source install/setup.bash
+source ~/venvs/linkerbot-hand-ros/bin/activate
+source ~/linkerbot_ws/install/setup.bash
+cd ~/linkerbot_ws/src/linkerbot-hand-ros
+python -m pip install pytest ruff
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q
 ruff check .
 ruff format --check .
 ```
+
+测试使用替身/内存协议验证软件行为；适配器通信、真实受压响应和机械动作需要对应硬件验证。
+命令发送、完整触觉与 ROS 发布频率的测试方法见[频率测试](../linkerbot_hand_ros/docs/zh/frequency_benchmark.md)。
+变更记录通过 Git 历史及对应 PR 查看。

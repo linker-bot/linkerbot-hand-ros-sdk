@@ -1,5 +1,7 @@
 # 自动发现配置示例
 
+[English](../discovery_examples.md) | [使用手册](../../README_zh.md)
+
 以下文件随驱动安装到 `share/linkerbot_hand_ros/config`，源码位于本包 `config`。它们是可校验的模板；接口、时序、固件和厂商库必须按现场填写，软件加载通过不代表适配器实机验收通过。
 
 ## 平台范围
@@ -70,6 +72,5 @@ ros2 launch linkerbot_hand_ros multi_hand.launch.py config:=./hands-lab.yaml
 
 生成文件保留可取得的身份条件、实际端点、namespace 和逐手参数；新设备不自动加入，已有输出不覆盖。跨后端使用对应高级模板生成，例：`discover:=true discovery_config:=/实际路径/discovery-pcan-fd.yaml output:=./hands-pcan.yaml`。
 
-## 软件验证边界
-
-八份模板均经当前 SDK 配置/schema 校验；每份部署或由高级模板生成的部署都在新进程加载、重新匹配内存候选并 configure，未打开厂商库或向硬件发送帧。实际接口名称、库位数、驱动、固件、CAN 时序和 Windows ROS 支持仍需实机验收。常见失败见[故障排查](troubleshooting.md#自动发现与部署加载故障)。
+模板固定了明确的通道范围；使用 MiniCANFD 自动枚举时，省略全局通道筛选和 Linux 布局，
+规则见[连接说明](connection.md#minicanfd)。启动失败见[发现与部署排障](discovery_troubleshooting.md)。

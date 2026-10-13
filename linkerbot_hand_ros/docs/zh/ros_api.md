@@ -1,4 +1,6 @@
-# ROS 2 API Reference
+# ROS 2 API 参考
+
+[English](../ros_api.md) · [使用手册](../../README_zh.md)
 
 默认节点名为 `/linkerbot_hand`。所有向量顺序、范围、单位说明和支持性均读取
 `/linkerbot_hand/capabilities`，ROS 不维护第二份型号表。
@@ -64,11 +66,7 @@ float64[] values
 - `REPRESENTATION_RAW=2`：设备协议原值，不做 percent、方向、LUT 或物理单位转换。
 - 长度必须等于 capability 关节数量，整数 raw 通过 ROS float64 传输时必须是整数形式。
 
-```bash
-ros2 topic pub --once /linkerbot_hand/command/angles \
-  linkerbot_hand_msgs/msg/HandJointCommand \
-  '{client_id: 1, user_sequence: 101, representation: 1, values: [50, 50, 50, 50, 50, 50]}'
-```
+发送目标见[O6 命令示例](examples.md#发送一个-o6-角度目标)。
 
 命令行未填写 `publisher_stamp` 时该字段为零，因此不能计算发布到驱动接收延迟；正式控制与
 性能测试应使用 `HandCommandClient`。并行发布者必须使用不同的非零 `client_id`。
@@ -186,63 +184,16 @@ device_measured, device_queried, meta
 finger name、rows、columns 和 row-major raw；一个消息代表一次完整多指事务，不按关节或
 单指计算频率。
 
-force capability 的 `payload_projection` 决定公共发布契约：
+触觉字段通过 `HandForceField` 发布；点阵、descriptor、FnS、字段有效性及共享查询见
+[触觉指南](force.md)。消息结构见[消息包说明](../../../linkerbot_hand_msgs/README.md)。
 
-| 投影 | 话题 | 数据 |
-| --- | --- | --- |
-| `tactile_matrix` | `~/state/tactile` | 矩阵触觉，当前六个非 O30 型号 |
-| `tactile_descriptor` | `~/state/tactile_sensors` | O30 五指身份、metadata、fields 和 raw_bytes |
-| `tactile_descriptor` 且五指都有标量 FnS | `~/state/normal_force_resultant` | 从同一 force 样本提取的五指合力，无额外设备查询 |
-| `raw_vector` | `~/state/force` | 标量 force；当前没有型号声明 |
+<a id="o30-tashan_gather-单值字段"></a>
+O30 TASHAN_GATHER 提供 fn/ft/fd/px 单值，按实际 descriptor 和 `valid_values` 使用，
+不由 ROS 推断物理单位或生成 FnS。
 
-`HandCommandClient.telemetry_capability("force")` 返回能力副本；未收到能力、未声明或固件禁用时
-返回 None，不产生设备 I/O，也不代表驱动已 active。外部节点可直接读取能力消息中的同名字段。
-
-`HandTactileSensor.maximum_rows/maximum_columns` 表示最大行列数；同时提供
-`requested_rows/requested_columns`、`selected_sensor`、`available`、
-`valid_data_position_mode`、`rectangle_fill`。最大尺寸和请求尺寸都不能用来强行 reshape
-返回数据，实际字段数量和字节偏移以 descriptor 为准。明确缺失的手指保留身份与空字段/字节，
-不表示零力；缺少任一手指 FnS 时不发布五指合力。合力为设备 FnS 原值，不由矩阵求和或换算成 N。
-
-统一触觉使用 `~/state/force_fn`、`force_fns`、`force_ft`、`force_fts`、
-`force_fd`、`force_fds`、`force_px`，类型为 `HandForceField`。
-支持表、单位、缺失值、共享查询和频率参数见[统一触觉字段](force.md)。
-
-### O30 TASHAN_GATHER 单值字段
-
-实测资料中的 descriptor 为 `Fn_F32_1;Ft_F32_1;Fd_U16_1;Px_U32_1`：每个已安装的
-手指传感器返回 14 字节小端数据，四个字段各有一个值。ROS 复用现有 `HandForceField`
-话题发布小写 `fn/ft/fd/px`，每个 present 传感器的 `raw` 长度为 1。Fn/Ft/Px 的零值
-仍是存在的有效采样，不表示缺少传感器；行列 metadata 不能用于把单值强制 reshape 为
-点阵或三维力向量。原 descriptor 与 raw bytes 保留在 `~/state/tactile_sensors`。
-
-同一原生样本中的四个字段共享 sequence、采集时刻、来源、连接代次和
-`query_channel="force"`；分别设置字段频率时使用最高值调度同一个查询。
-descriptor 发现前支持情况未知，确认此布局后 fn/ft/fd/px 支持，fns/fts/fds 缺失。
-该布局没有 FnS，不发布新的 `force_fns` 或 `normal_force_resultant`，也不把 Fn 求和
-或改名生成合力。缺失手指保留身份、`present=false` 和空数组。
-话题已创建或仍保留不代表此布局提供该字段，实际支持情况应读取
-`capabilities.force_fields.support_known/supported` 并检查实际样本。
-
-Fn/Ft 保留设备上报的力单位；Fd/Px 不继承该单位，SDK 未说明时单位仍未知。
-Fd 的 `65535` 按 U16 原值透传，不换算角度、不由 ROS 定义为无效码；特殊值物理含义
-尚未确认，`valid_values` 仅透传 SDK 判定。无需增加消息类型或额外 CAN 查询。
-
-故障解释中的 `supported_flags` 列出当前协议有定义的标志；其他 false 字段不代表
-设备确认正常。L20Lite 保留原字节、未知位以及负载过载、过流、过热、磁编码异常、
-过压/欠压解释，不支持清错。堵转维持输出统一使用 `hold_current` 和
-`has_hold_current`，包括 L20Lite C7。
-
-`~/state/fault_statuses` 的 L6/L20 具名字段与 SDK 一致：
-
-| 型号 | 字段与含义 |
-| --- | --- |
-| L6 | `mcu_over_temperature` MCU 过温；`motor_over_temperature` 电机过温；`overload_2`、`overload_1` 两种过载标志；`phase_a_over_current`、`phase_c_over_current`、`phase_b_over_current` 分别为 A/C/B 相过流 |
-| L20 | `motor_communication_abnormal` 电机通信异常；`soft_rotor_lock` 软堵转；`motor_self_test_abnormal` 电机自检异常；`motor_stall` 失速；`motor_rotor_lock` 堵转；以及 `over_temperature`、`over_current`、`voltage_abnormal` |
-
-L6 不把 MCU 与电机过温合并为通用过温，也不合并各相过流。L20 软堵转与失速、堵转
-分别保留；软堵转可能在抓握时出现、释放后自动解除，不表示清错命令。`raw`、保留位和
-文字解释原样提供。
+故障解释见 `state/fault_statuses` 的 `supported_flags`、`raw`、`reserved_bits` 和
+`descriptions`；未声明字段为 false 不代表设备正常。L6 MCU/电机温度及各相过流、L20
+软堵转/失速/堵转等分别保留其 SDK 语义。
 
 ## 堵转状态
 
@@ -296,143 +247,63 @@ current=`C7`。ROS 只收发 raw；当前资料给出的解释分别为 `1000/25
 `accepted=true` 仅表示进入 SDK，后续阶段看 `/command/status`。服务错误通过稳定
 `error_code` 返回，调用方不能解析 message 文本分类。
 
+在 SDK 接纳前被拒绝的 Topic 命令可能只记入 diagnostics，没有 command handle 或状态消息。
+需要逐次确认接纳时使用可靠 setter 服务；服务命令 `client_id=0`，按响应的 `command_id`
+关联状态。Topic 命令按 `(client_id, user_sequence)` 关联。inactive 返回 `device_not_ready`。
+
 ## 按需读取配置与限制状态
 
-上述 `GetRawValues` 入口在 configure 时按 telemetry capability 创建，在 active
-状态下调用，直接复用 SDK getter。只有写命令能力不代表存在可读通道。订阅
-`~/state/<semantic>` 只是观察缓存，不会触发设备查询；主动查询成功后更新 SDK 缓存，
-启用状态发布时会发布变化后的样本。调用这些服务不增加轮询通道，也不发送配置写命令。
+`GetRawValues` 入口在 configure 时按 telemetry capability 创建，在 active 时调用。
+有写命令不代表有可读通道。主动查询更新 SDK 缓存并经正常状态流程发布；
+订阅 Topic 不查询设备，服务读取也不会启用轮询或发送配置写命令。
 
-读取 `~/capabilities.telemetry` 中的 `read_mode`，区分以下行为：
-
-| `read_mode` | 调用行为 | 当前示例 |
+| `read_mode` | 行为 | 示例 |
 | --- | --- | --- |
-| `query` | 请求调用之后的新设备样本 | O6 配置速度/加速度；O30 运动时间 |
-| `command_response` | 返回最近一次有效的设备写入回包，不发新查询 | O6 电流上限；L6 配置速度；L20Lite 配置速度/电流上限 |
-| `command_cache` | 返回最近一次有效的本地已发送命令缓存，不表示设备已确认，不发新查询 | L30 配置速度/电流上限 |
+| `query` | 请求调用之后的新设备样本 | O6 配置速度/加速度、O30 运动时间 |
+| `command_response` | 返回有效设备写回包，不产生 I/O | L6 配置速度、O6 电流限制、L20Lite 配置 |
+| `command_cache` | 返回本地已发送命令缓存，不证明设备确认 | L30 配置速度/电流限制 |
 
-O6 的 `current_hz` 轮询实时电流并发布到 `~/state/currents`。SDK 将 `0x02` 查询
-回复解释为实测电流，保留 `device_measured=true`、`device_queried=true` 和
-`ORIGIN_DEVICE_RESPONSE`，不能把它当作电流上限回读。
-`~/command/current_limits` 收到有效完整写回包后确认命令，并把设备实际回值保留在
-`~/state/current_limits`；回值允许不同于目标。该配置样本使用
-`ORIGIN_DEVICE_CONFIG_RESPONSE`，`device_measured=false`、`device_queried=false`。
+先检查 `success`，再检查 `state.meta`、原始单位、比例说明和可信度。
+缓存保留原采集时刻及 sequence，成功响应仍可能 stale。`device_queried` 是通道能力，
+单个样本来源看 `meta.origin`；ROS 不做物理单位换算，程序不应解析响应 message。
 
-O6 的 `~/get_current_limits` 按 `command_response` 读取这个缓存，不发查询或写命令。
-尚无有效完整写回包、写入失败后仍无有效回包，或 SDK 恢复到新连接代次后尚未重新写入时，
-返回 `unsupported_operation` 和无效状态。读取缓存保留原 sequence 与采集时刻；
-`success=true` 不保证新鲜，仍须检查 age/stale。实时电流查询/轮询不会填充或覆盖限制
-缓存，限制写入也不会覆盖实测电流。同一连接代次内后续写入失败时，已有的有效完整回包
-仍可读取，保留原元数据，但它不证明失败目标已生效；恢复后缓存失效，须等新的完整写回包。
-两个通道使用原值 count，保留 SDK 中有冲突的比例说明，ROS 不换算成 mA。
+电流与转矩接口保持独立：
 
-L20/L20Lite 的实时电流由 `current_hz` 轮询并发布到 `~/state/currents`，
-保留 `device_measured=true`；L20 没有电流限制回读服务。
-L20Lite 的 `~/get_configured_speeds`、`~/get_current_limits` 按 `command_response` 读取缓存。
-`~/command/speeds`、`~/command/current_limits` 收齐两组有效写回包后才进入
-`ACKNOWLEDGED`；设备实际回值发布到 `~/state/configured_speeds`、`~/state/current_limits`，
-来源为 `ORIGIN_DEVICE_CONFIG_RESPONSE`，`device_measured=false`、`device_queried=false`。
-读取服务不发设备请求，不刷新样本 sequence 或采集时刻；尚无完整回显时返回
-`unsupported_operation` 和无效状态。实时速度、电流的查询与轮询仍与写回显分开。
+- 实时电流用 `current_hz` 与 `state/currents`，不会填充或替换电流限制缓存。
+- O6 `get_current_limits` 保留完整写回包，回值允许不同于目标。其来源为
+  `ORIGIN_DEVICE_CONFIG_RESPONSE`，`device_measured=false`、`device_queried=false`。
+  同代次内后续写入失败时，已有有效回包仍可读取，但不证明失败目标生效；恢复后须有新完整回包。
+- L20 没有限制回读。L20Lite 速度/电流限制命令收齐两组有效回复才 ACK，
+  配置缓存与实时速度/电流独立。
+- O30 `0x04` 电流限制和 `0x06` 转矩限制分别有命令、getter 和状态；
+  `torques_hz` 读取实测转矩，不代表支持 `command/torques`。
+- L6 `command/torques` 是上文定义的输出/模式命令。
 
-O30 的实时电流与转矩分别使用
-`current_hz` / `torques_hz`，发布到 `~/state/currents` / `~/state/torques`；限制值分别使用
-`~/get_current_limits` / `~/get_torques_limits` 服务，发布到对应限制状态话题。
-所有型号均透传 SDK 的原始单位、比例说明，不增加物理换算。
+各型号设置与操作见[型号指南](models.md)。L20Lite 堵转有三项 setter 和已确认回包状态，
+没有 `get_stall_protection`；`hold_current` 为通用的堵转后保持电流字段。
 
-电流与转矩限制使用以下接口，实际可用性以所连接设备的 capability 为准：
+| 失败条件 | 结果 |
+| --- | --- |
+| 缓存尚无有效样本 | `unsupported_operation` 与无效状态，不代发写命令制造样本 |
+| 可选查询已被当前固件能力降级 | `unsupported_firmware`，端点保留 |
+| inactive 或关闭中 | `device_not_ready` |
+| timeout 非法 | `validation` |
+| SDK 超时/协议错误 | 保留稳定 SDK 错误码 |
 
-| 型号 | 限制命令 / 客户端方法 | 状态 / 读取服务 |
-| --- | --- | --- |
-| O6 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits`，设备写回包缓存 |
-| L6 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits`，主动查询 |
-| L20 | `current_limits` / `set_current_limits()` | 实时状态为 `currents`；使用 `current_hz`，无限制回读 |
-| L20Lite | `current_limits` / `set_current_limits()` | 实时 `currents` 使用 `current_hz`；独立的 `current_limits` 状态/服务保留完整写回显，不发查询 |
-| O20 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits` |
-| L30 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits`，本地已发送命令缓存 |
-| O30 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits` |
-| O30 | `torques_limits` / `set_torques_limits()` | `torques_limits` / `get_torques_limits` |
-
-O30 `0x04` 电流接口与 `0x06` 转矩对象独立。L6 已声明上文的
-`set_torques()` 原值输出/模式命令；O30 的转矩限制设置不代表开放该命令，命令与
-状态能力分别判断。
-
-成功响应的 `state` 保留 raw、通道名称、单位、比例说明、可信度及 `meta`。读取回包或
-缓存不会刷新原采集时刻和 sequence；age/stale 按读取时刻计算，因此 `success=true`
-的缓存仍可能 `meta.stale=true`。`device_queried` 表示通道能力，不代表每条已发布样本
-都来自查询；某条样本的来源看 `meta.origin`。回包/缓存模式的 message 会说明未执行设备
-查询，程序判断应使用结构化元数据。
-
-先检查 `success` 再使用 `state`。回包/缓存尚无有效样本时返回 `unsupported_operation`，
-不会为了取得数据而代发写命令。当前固件不支持某可选查询时，入口保留，SDK 完成降级后
-返回 `unsupported_firmware`。inactive 或正在关闭时返回 `device_not_ready`；timeout
-参数非法返回 `validation`；SDK 超时、协议等错误保留原有稳定错误码。`timeout_s` 必须
-有限且大于零，并为 `shutdown_timeout_s` 留出管理 worker 的结束余量。服务不增加固件
-版本门槛；查询仍与命令共享 SDK 设备/总线调度，应在总线预算内按需调用。
+`timeout_s` 须有限且为正，并为 `shutdown_timeout_s` 留出 worker 结束余量。
+查询与命令共用设备/总线调度，应在总线预算内按需调用。
 
 ## L6 控制增益
 
-三个增益使用 SDK 同名接口，只在当前型号声明对应能力时开放；当前为 L6。每次提交
-六关节原值，顺序见 `~/capabilities`，不会自动转换物理值、切换控制模式或保存到非易失存储。
-
-| 名称 | 协议码 | 原始范围与解释 | ROS 客户端 setter |
-| --- | --- | --- | --- |
-| `position_kp` | `0x06` | `0..200` 整数；位置模式；协议 Kp = raw × 10，默认 raw 50；通用字节范围与 Kp 上限有冲突，按 SDK 能力取值 | `set_position_kp(values)` |
-| `position_kd` | `0x07` | `0..255` 整数；位置模式；默认 21，建议不大于 40，建议值不是强制上限 | `set_position_kd(values)` |
-| `torque_kd` | `0x08` | `0..255` 整数；力矩模式；默认 1，没有明确物理单位或比例 | `set_torque_kd(values)` |
-
-Kd 原表概述 `0..255` 与逐字节说明 `1..255` 有冲突，ROS 沿用 SDK 能力，不另加范围。
-各通道的 `raw_unit`、`raw_scale_note`、`unit_confidence` 保留 SDK 描述；ROS 收发仍为原值。
-
-每个名称都对应以下通路，例如 `position_kp`：
-
-- `~/command/position_kp`：`HandRawCommand`，与 `HandCommandClient.set_position_kp()` 对应。
-- `~/set_position_kp`：`SetRawValues`，可靠服务提交，`accepted` 只代表有界 FIFO 接纳；
-  队列满返回 `queue_full`，后续通过命令状态观察 `ACKNOWLEDGED` 或失败。
-- `~/get_position_kp`：`GetRawValues`，在 active 状态按需查询设备。
-- `~/state/position_kp`：`HandTelemetry`，只发布 SDK 缓存变化；订阅不会发 CAN 请求。
-
-`position_kd`、`torque_kd` 使用同样命名。写回包与配置查询保留 SDK 样本来源，均不是
-关节运动实测量。没有新增增益轮询参数，不应把这些配置加入默认高频采集。
-
-```bash
-ros2 service call /linkerbot_hand/get_position_kp \
-  linkerbot_hand_msgs/srv/GetRawValues '{timeout_s: 0.2}'
-```
+`position_kp`、`position_kd`、`torque_kd` 均提供命令 Topic、可靠 setter 服务、主动 getter
+和缓存状态。范围与原值解释见[型号功能](models.md#l6)。写入共用有界 FIFO，
+`accepted` 表示接纳；后续协议结果看 command status，不隐式换模式或保存，无增益轮询参数。
 
 ## L6 限位补偿
 
-入口按 command/telemetry capability 创建，当前只有 L6 声明。协议 `0x38` 携带六个
-`0..255` 整数，顺序为 `thumb_flex`、`thumb_abd`、`index`、`middle`、`ring`、`pinky`。
-单位为原始 `count`，物理比例和正负方向未知；ROS 不换算成角度或百分比。
-
-`HandCommandClient.set_limit_compensations(values)` 会校验已确认身份的 capability、
-驱动 active、长度、整数与范围，再发布到 `~/command/limit_compensations`。
-返回 `CommandPublication` 只说明消息已发布。Topic 沿用 best-effort、keep-last(1)；
-在 SDK 接纳前发生的拒绝记入 diagnostics，此时没有 command handle，也不会产生该命令
-的状态。需要逐次确认接纳时，使用可靠的 `~/set_limit_compensations` 服务。
-
-SDK 接纳后，`CommandFamily.LIMIT_COMPENSATION` 与其他 FIFO 配置、离散操作共用
-`discrete_queue_capacity` 限定的有界队列，保持顺序，不使用新值覆盖待执行旧值。
-队列满时 setter 服务返回 `accepted=false`、`error_code=queue_full`；
-`accepted=true` 只表示已入队，需继续观察 `~/command/status` 的 `ACKNOWLEDGED` 或
-`FAILED`。L6 要求六字节精确回显才确认成功；不会隐式调用 `save_parameters()`。
-服务命令的 `client_id=0`，按响应中的 `command_id` 关联状态；客户端 Topic 命令仍按
-`(client_id, user_sequence)` 关联。
-
-```bash
-ros2 service call /linkerbot_hand/get_limit_compensations \
-  linkerbot_hand_msgs/srv/GetRawValues '{timeout_s: 0.5}'
-```
-
-查询在有界 admin worker 执行。成功响应的 `state` 是 `HandTelemetry`，保留 raw、关节
-名称、`raw_unit`、`raw_scale_note`、`unit_confidence` 和 `meta`。失败返回 SDK 稳定
-错误码；固件连续查询失败达到可选查询降级条件后返回 `unsupported_firmware`，不按固件
-版本限制连接。inactive 时服务返回 `device_not_ready`。
-
-`~/state/limit_compensations` 发布变化后的配置缓存及有效性，包括成功查询和经验证的
-写响应。订阅该 Topic 不触发设备 I/O，也不增加轮询频率参数；使用者须检查 `meta.valid`、
-`meta.stale`、来源及连接代次。这是配置数据，`device_measured=false`。
+`limit_compensations` 使用六个 0..255 原值，物理比例和方向未知。
+Topic/client setter 或 `set_limit_compensations` 提交配置，`get_limit_compensations` 主动查询，
+`state/limit_compensations` 发布配置缓存。六字节精确回显才确认 ACK，不自动保存。
 
 ## Diagnostics
 
@@ -441,14 +312,19 @@ ros2 service call /linkerbot_hand/get_limit_compensations \
 requested/achieved Hz、`completed_reads`、角度命令反馈数、有效反馈数、反馈策略、
 deadline/timeout/age，以及 transport 帧、字节、route miss 和总线错误。
 
-读取 diagnostics 不产生 CAN 查询。需要新 fault 样本时设置 `faults_hz` 或使用 SDK 主动读取；
+读取 diagnostics 不产生 CAN 查询。需要新 fault 样本时设置 `faults_hz`；
 ROS 不把 health timer 变成故障轮询器。
 
 ## 发布规则和 QoS
 
-- 高频命令：best-effort、depth 1、volatile。
-- 状态和触觉：sensor-data 风格 best-effort、小深度。
-- command status 和 service：reliable、有界。
-- capabilities/device info：reliable、transient local。
-- SDK 缓存 revision 变化会立即唤醒独立状态发布线程；`publish_rate_hz` 只控制无新数据时
-  age/stale 的缓存复查频率，sequence 未变化时不会重复发布旧样本伪装新数据。
+| 接口 | Reliability | Durability | Depth |
+| --- | --- | --- | --- |
+| 命令、状态与触觉 | best effort | volatile | 1 |
+| command status | reliable | volatile | 32 |
+| capabilities/device info | reliable | transient local | 1 |
+
+`~/` 相对驱动节点展开，默认 `/linkerbot_hand`；状态订阅须兼容 best-effort。
+SDK 缓存变化唤醒独立发布线程，sequence 或有效性变化时发布。
+相同序号的 stale/valid 变化不是新设备采样。`publish_rate_hz` 正值用于空闲有效性复查，
+0 暂停 ROS 状态发布；polling=0 不清除缓存，也不阻止写回包更新。
+生产 ROS 入口使用多线程 executor；等待规则见[客户端等待](client_waits.md)。

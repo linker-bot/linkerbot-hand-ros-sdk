@@ -1,30 +1,32 @@
 # Lifecycle 与参数配置
 
-启动可选择手工参数、单手 `discover:=true`、多手发现及生成文件复用。
-扫描发生在启动准备阶段，configure 仍保持零设备 I/O；详见
-[自动发现指南](discovery.md)。发现部署 YAML 与下面的 ROS 参数 YAML 均受支持。
+[English](../configuration.md) · [使用手册](../../README_zh.md)
 
 ## Lifecycle 行为
 
-| 状态转换 | 行为 |
-| --- | --- |
-| configure | 解析参数，构造 transport 描述、唯一 `HandDevice` 和 ROS 实体；零连接、零设备 I/O |
-| activate | `open()`，验证型号/固件/传感器变体，安装 polling plan，启用命令和状态发布 |
-| deactivate | 先撤销命令入口，再停止 SDK polling；不自动运动、不关闭连接 |
-| cleanup | 有界停止 admin worker、polling 和设备 runtime，销毁 ROS 实体 |
-| shutdown/error | 无论来自哪个状态都尝试有界 stop/close，不依赖析构函数 |
+- configure：校验参数，构造设备和 ROS 实体；不打开设备或发送查询。
+- activate：打开连接、验证身份并读取 baseline，启动 SDK polling 和命令入口。
+- deactivate：停止命令和 polling，保留连接，不自动发送运动或保持目标。
+- cleanup/shutdown/error：有界停止 worker 并关闭连接；失败会报告并保留待清理资源以便重试。
 
-launch 默认 `autostart:=true`。外部 lifecycle manager 接管时：
+launch 默认 `autostart:=true`。外部管理时先启动：
 
 ```bash
 ros2 launch linkerbot_hand_ros hand.launch.py autostart:=false
+```
+
+在另一个已加载环境的终端依次执行所需转换：
+
+```bash
 ros2 lifecycle set /linkerbot_hand configure
 ros2 lifecycle set /linkerbot_hand activate
+ros2 lifecycle set /linkerbot_hand deactivate
+ros2 lifecycle set /linkerbot_hand cleanup
 ```
 
 ## 静态参数
 
-静态参数在 configure 后拒绝修改，需先 `deactivate -> cleanup`：
+configure 后不能修改以下参数，需先 deactivate/cleanup：
 
 | 参数 | 默认值 | 含义 |
 | --- | --- | --- |
@@ -45,128 +47,85 @@ ros2 lifecycle set /linkerbot_hand activate
 | `recovery_timeout_s` | `5.0` | 每轮恢复执行总预算，包含准备、读取与重试等待；正数 |
 | `recovery_retry_delay_s` | `0.2` | 响应超时后重试前的最小接收静默间隔；正数 |
 
-响应超时从该阶段整批请求发送完成开始计时，完整回复提前到达即结束等待。
-`transaction_timeout_s=0.0` 在 ROS 适配层转换为 SDK 的 `None`；
-直接调用 SDK 时应使用 `None`，不接受 `0`。该参数覆盖 baseline、
-主动查询、轮询和需要回复的命令，保留协议发送间隔及无需回复命令的行为，不增加重试。
-身份阶段使用独立的 `identity_timeout_s`。管理服务的 `timeout_s` 仍是调用者等待预算，
-不代表单阶段响应时间，也不因为等待超时而取消 SDK 后台恢复。
-
-恢复策略参数只能在未配置状态下修改。仅身份和 baseline
-的响应超时允许重试；身份不匹配、协议错误和写入不重试。实际静默窗口取配置、失败阶段
-响应窗口和协议隔离窗口的最大值，收到本设备的帧会重新计时，整轮仍受总预算限制。
-无请求序号协议无法识别超出静默窗口的任意迟到旧帧，可按现场最大延迟增大间隔。
-服务等待超时不取消共享恢复；达到恢复执行截止后不提交成功。底层阻塞 I/O 不能强制
-抢占，SDK 在返回后复核截止。开启自动重连时，失败后仍可按退避策略另起有界的一轮。
-
-型号解析使用 Hand SDK 的统一规则：`model` 填写 `o6`、`l6`、`l20lite`、`l20`、
-`o20`、`o30` 或 `l30`，大小写不敏感，L20Lite 也接受 `l20-lite`。不能用完整产品编号
-替代型号。SDK 在 configure 阶段校验配置；
-消息中的 `model` 使用规范型号，`product_code` 原样保留设备上报的编号。
+型号使用 SDK 规范名称；`product_code` 保留设备实际编号，不能代替 `model`。
 
 ## 动态轮询与发布
 
-| 参数 | 默认值 | 查询/发布对象 |
+| 参数 | 默认值 | 含义 |
 | --- | --- | --- |
-| `angles_hz` | `100` | SDK 角度查询 |
-| `angle_feedback` | `adaptive` | 角度查询与设备命令回显的组合策略 |
-| `speeds_hz` | `0` | SDK 实测速度查询 |
-| `force_hz` | `0` | SDK force 或完整触觉事务 |
-| `temperature_hz` | `0` | SDK 温度查询 |
-| `current_hz` | `0` | SDK 实测电流查询 |
-| `faults_hz` | `0` | SDK 故障查询 |
-| `torques_hz` | `0` | SDK 力矩通道查询，仅 capability 支持时；L6 为输出/模式原值，物理测量语义以 capability 为准 |
-| `voltage_hz` | `0` | SDK 电压查询 |
-| `publish_rate_hz` | `100` | 无新 revision 时的缓存 age/stale 复查频率 |
-| `diagnostic_rate_hz` | `1` | `/diagnostics` 发布频率 |
+| `angles_hz` | 100 | 角度反馈目标频率，由反馈策略选择查询/回包 |
+| `angle_feedback` | `adaptive` | 角度查询与命令反馈策略 |
+| `speeds_hz` | 0 | 实测速度 |
+| `force_hz` | 0 | 可用 fn + fns 的频率简写 |
+| `force_fn_hz`, `force_fns_hz`, `force_ft_hz`, `force_fts_hz`, `force_fd_hz`, `force_fds_hz`, `force_px_hz` | 0 | 具名触觉字段请求 |
+| `temperature_hz`, `current_hz`, `faults_hz`, `voltage_hz` | 0 | 相应实时状态查询 |
+| `torques_hz` | 0 | capability 声明的转矩通道；L6 为输出/模式，O30 为实测转矩 |
+| `publish_rate_hz` | 100 | 空闲缓存有效性复查；0 暂停状态发布 |
+| `diagnostic_rate_hz` | 1 | diagnostics 发布频率 |
 
-非零 polling 只允许 capability 声明 `device_queried=true` 的通道。请求不支持通道时参数
-事务失败，不会静默忽略。频率设为 0 后 SDK 不再生成该通道的查询；
-`publish_rate_hz=0` 只暂停 ROS 状态发布，并不停止设备 polling。
+非零查询频率须有对应 capability。0 停止该通道的主动查询，不清除缓存，也不阻止命令回显。
+`publish_rate_hz=0` 仅停止 ROS 状态发布；SDK 查询仍按 polling plan 运行。
+SDK 新缓存会立即唤醒发布，空闲时才按发布频率检查 age/stale；sequence 或有效性变化才发布。
 
-`angle_feedback` 的三个取值分别为：
+`angle_feedback`：
 
-- `query_only`：只由主动角度查询满足 `angles_hz`，命令回显仍更新 SDK 缓存和指标，但不发布到
-  ROS `~/state/angles`、也不唤醒状态发布线程，避免同一目标周期产生两条角度消息；
-- `command_feedback_only`：只用已验证的设置回显满足反馈，不主动补充角度查询；
-- `adaptive`：优先使用设置回显，目标周期内没有回显时主动查询补足，默认使用该策略。
-
-生产入口使用 `MultiThreadedExecutor`，Lifecycle 与参数服务仍共享默认互斥回调组。
-SDK 缓存 revision 变化会立即唤醒独立状态发布线程，避免固定 timer
-与反馈同频时发生采样混叠；`publish_rate_hz` 只控制无新 revision 时 age/stale 的复查频率。
-sequence 未变化时不会重复发布旧样本。
+- `query_only`：主动查询满足角度目标频率；回显仍在 SDK 缓存/指标中，但不发布到 ROS 角度 Topic。
+- `command_feedback_only`：只用设备返回的当前角度，不补查询；要求角度命令 `returns_current_state=true`。
+- `adaptive`：优先回显，缺少反馈时补查询。
 
 ```bash
-ros2 param set /linkerbot_hand angles_hz 100.0
+ros2 param set /linkerbot_hand angles_hz 60.0
 ros2 param set /linkerbot_hand angle_feedback query_only
-ros2 param set /linkerbot_hand force_hz 30.0
-ros2 param set /linkerbot_hand publish_rate_hz 100.0
-ros2 param set /linkerbot_hand diagnostic_rate_hz 10.0
+ros2 param set /linkerbot_hand current_hz 10.0
 ```
 
-运行中多个 rate 参数作为一次原子事务修改：
+触觉通道和共享查询见[触觉指南](force.md)。切换 `force_hz` 与独立字段请求时，用
+`AsyncParameterClient.set_parameters_atomically()` 或 `SetParametersAtomically` 服务一次更新。
+逐条 `ros2 param set` 不是原子事务。
 
-```bash
-ros2 param set --help
-```
+动态更新经过全部 ROS 校验后才应用。失败会恢复整批参数及运行配置；以最终服务响应判断成功，
+参数事件可能包含提议值和恢复值。恢复失败时停止控制并关闭连接，需成功 cleanup 后重新
+configure/activate。若错误路径已清理完成，可直接 configure/activate。
 
-需要严格原子更新时应通过 `rcl_interfaces/srv/SetParametersAtomically` 或代码中的
-`AsyncParameterClient.set_parameters_atomically()`，频率 benchmark 已按此方式实现。
+参数与 Lifecycle 服务共享互斥回调组；直接从代码调用时也应串行化，参数回调中不支持嵌套更新。
+生产入口使用多线程 executor，状态发布由独立缓存变化线程驱动。
 
-动态更新先经过所有 ROS 校验回调，只有参数提交成功后才应用 SDK polling 和 ROS 发布频率。
-后续校验拒绝时不会改变运行配置。应用失败会尝试恢复整批参数和运行配置，返回
-`successful=false` 与失败原因；逐个参数 API 保留前面已成功的更新。
+## 超时与恢复
 
-ROS 参数事件可能先发布新值、再发布恢复的旧值，post-set 回调也在 SDK 应用之前运行。
-因此参数事件不能作为设备已采用新频率的确认，应检查参数服务的最终响应。请勿在参数回调
-内部再次设置参数，嵌套更新会明确拒绝；自定义校验、pre-set/post-set 回调同样参与恢复，
-SDK 不会绕过它们强改 ROS 内部参数字典。
+`identity_timeout_s` 用于每个身份响应阶段；`transaction_timeout_s=0.0` 映射为 SDK `None`，
+沿用协议响应窗口，正数覆盖普通 baseline、读取、轮询及需回复命令的每阶段响应窗口。
+计时从该阶段请求批发送完开始，完整回包提前结束等待；不修改协议发送间隔或增加写入重试。
 
-如果运行时恢复失败，或其他回调拒绝/改写了参数恢复，驱动停止接收命令、停止 polling 并
-关闭连接，报告 `cleanup required`。在成功 cleanup 后重新 configure/activate；若已通过
-ROS error transition 完整释放运行时，直接重新 configure/activate 即可。驱动保留的参数
-表示下次配置的目标值，不能将此故障状态解释为设备仍按该频率运行。
+管理服务 `timeout_s` 是调用者等待预算，有限且为正，并须给 `shutdown_timeout_s` 留出 worker
+结束余量；它不是响应窗口，也不取消已开始的共享恢复。
 
-参数服务与 Lifecycle 服务使用同一互斥回调组。应用内直接调用参数或 Lifecycle 方法时，
-也应在该组中调度或由调用方串行化，避免绕过 ROS 服务调度并发改变生命周期。
+每轮恢复最多 `recovery_max_attempts` 次、总预算 `recovery_timeout_s`。只重试身份/baseline
+响应超时，不重试身份不匹配、协议错误或写入。重试前取配置间隔、失败响应窗口和协议隔离窗口的最大值，
+每个本设备回包都会重新开始静默计时；仍受整轮预算限制。无请求序号的协议不能识别任意迟到帧。
+阻塞 I/O 返回后再检查截止；过期恢复不能提交就绪。自动重连可在退避后发起下一轮。
+
+恢复重新验证身份、清除目标并读取 baseline，不重放断线前目标，不自动清错、使能或标定。
+连接代次改变后，业务需重新确认反馈并显式提交目标。
 
 ## Transport JSON
 
-Linux SocketCAN，classic CAN 和 CAN FD 均由 capability 决定：
+手工连接格式见[连接指南](connection.md)。未知 backend、未知键、类型错误或缺必填键会被拒绝。
 
-```json
-{"backend":"socketcan","channel":"can0"}
-```
+| backend | 必填键 | 可选键 |
+| --- | --- | --- |
+| `socketcan` | `channel` | `nominal_bitrate`、`data_bitrate`、`auto_reconfigure`、`receive_own_messages` |
+| `python_can` | `interface_name`、`interface_type` | `nominal_bitrate`；仅经典 CAN |
+| `vendor_canfd` | 无；编号默认 0 | `device_index`、`channel_index`、`library_path`、`nominal_bitrate`、`data_bitrate`、`config_flags`、`model`、`can_type`、`frame_type` |
 
-可选字段：`nominal_bitrate`、`data_bitrate`、`auto_reconfigure`、
-`receive_own_messages`。
-
-`nominal_bitrate` 必须与型号 capability 一致，冲突时 configure 失败。
-
-`data_bitrate` 分两种情况。声明了数据段速率的型号（O20、L30 为 5 Mbit/s）同样严格校验，冲突即失败。而 O30 使用 BRS off，数据段恒等于标称速率、接口 dbitrate 不影响通信，其 capability 不声明数据段速率 —— 这类型号**推荐 5 Mbit/s，但任意波特率都可用**：不填 `data_bitrate` 时驱动采用该 SocketCAN 链路当前实际运行的数据段速率，只有在链路读不到时（未配置、未 UP）才回落到推荐的 5 Mbit/s。显式填写时以填写值为准，此时不读链路。
-
-因此在 1M、2M、7M 等任意数据段速率的总线上都无需为 O30 额外配置 `data_bitrate`。
-
-其他 python-can classic backend：
-
-```json
-{"backend":"python_can","interface_name":"PCAN_USBBUS1","interface_type":"pcan"}
-```
-
-厂商 CAN FD：
-
-```json
-{"backend":"vendor_canfd","device_index":0,"channel_index":0,"library_path":"/path/to/lib.so"}
-```
-
-`transport_json` 按 backend 提供连接配置；未知 backend、缺失必填键或多余键均为配置错误。
+所有对象都需 `backend`。速率须匹配型号 capability；经典 CAN 不接受 FD 专用选项。
+SocketCAN 的布尔选项默认 false。厂商参数默认 `config_flags=7`、`model=0`、`can_type=1`、
+`frame_type=4`，按实际适配器和终端接线确认。这里 `model` 是厂商库选项，不是手型号。
 
 ## 多设备
 
-当前维护范围为一条物理 CAN/CAN FD 通道一只手，多只手使用不同接口。
-`multi_hand.launch.py` 在一个 Python 进程中统一管理多个 Lifecycle 节点及失败回滚；
-同进程管理不意味着多个设备共用同一通道。示例接线为 L6 左手接 `can0`、O6 右手接
-`can1`，启动前分别配置两个接口。参数文件结构如下：
+一条物理通道一只手；namespace 隔离 ROS 名称，不隔离总线报文。
+`multi_hand.launch.py` 在同进程统一 configure 全部设备，再 activate；失败时逆序回滚并报告清理错误。
+独立 launch 进程不具备组生命周期管理。
 
 ```yaml
 /linkerbot_hand_container:
@@ -189,35 +148,12 @@ Linux SocketCAN，classic CAN 和 CAN FD 均由 capability 决定：
     angles_hz: 100.0
 ```
 
-启动：
+保存后启动：
 
 ```bash
-ros2 launch linkerbot_hand_ros multi_hand.launch.py \
-  config:=/absolute/path/to/hands.yaml
+ros2 launch linkerbot_hand_ros multi_hand.launch.py config:=/absolute/path/hands.yaml
 ```
 
-容器参数：
-
-| 参数 | 默认值 | 含义 |
-| --- | --- | --- |
-| `device_namespaces` | 空 | 非空且不重复的设备 namespace 列表 |
-| `autostart` | `true` | 先 configure 全部设备，再 activate 全部设备 |
-
-`autostart=true` 时，任一节点 configure 或 activate 失败都会按逆序 deactivate/cleanup
-已经启动的节点，进程不会保留部分激活状态。`autostart=false` 时可逐个控制：
-
-```bash
-ros2 lifecycle set /l6_left/linkerbot_hand configure
-ros2 lifecycle set /l6_left/linkerbot_hand activate
-```
-
-两只手的 `transport_json` 物理 key 相同时，`linkerbot-transport` 才共享一个 runtime、RX
-reactor 和 TX arbiter。不同 channel 仍位于同一 ROS 进程，但各自拥有独立 transport
-runtime；共享机制不能作为同通道多手的支持承诺，namespace 也不能隔离总线报文。
-独立 `hand.launch.py` 进程没有容器的组启动/回滚，也不能共享进程内仲裁器。
-
-## 恢复
-
-自动或显式恢复会重新验证身份和固件、清除旧命令并读取 baseline 状态。不会重放断线前或
-断线期间目标，不会自动张开、握拳、清错、enable 或 calibrate。业务层看到
-`connection_generation` 增加后必须清空旧到位判断，并显式提交新目标。
+`device_namespaces` 必须非空且不重复，并有对应节点参数段。`autostart` 默认 true；设 false 时
+逐个管理 `/<namespace>/linkerbot_hand`。不同 channel 拥有独立 transport runtime。
+需要扫描生成及身份约束时使用[发现部署](discovery.md)，其 YAML 与 ROS 参数文件结构不同。

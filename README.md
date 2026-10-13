@@ -1,94 +1,38 @@
 # Linkerbot Hand ROS 2
 
-This repository contains two independently discoverable ROS 2 packages:
+This repository contains three independently discoverable ROS 2 packages:
 
 - [`linkerbot_hand_msgs`](./linkerbot_hand_msgs): typed messages and services.
 - [`linkerbot_hand_ros`](./linkerbot_hand_ros): the Lifecycle driver and tools.
+- [`linkerbot_hand_gui`](./linkerbot_hand_gui): O6 URDF slider preview and safe
+  ROS 2 control bridge.
 
 ## Quick Start
 
-The [unified tactile guide](linkerbot_hand_ros/docs/zh/force.md) describes field topics
-and model capabilities on the latest `main`. Use `current_limits` for electrical
-limits and O30-only `torques_limits` for its separate torque-limit object. See the
-[current/torque API](linkerbot_hand_ros/docs/ros_api.md#on-demand-raw-reads).
-The commands below install the latest `main` branches of all three repositories.
+[简体中文](README_zh.md)
 
-The complete dependency chain is
-`linkerbot-transport -> linkerbot-hand -> linkerbot_hand_msgs/linkerbot_hand_ros`.
-Transport and Hand are installed from source, while the ROS packages are
-built together with `colcon` from the same `main` checkout. On Ubuntu 24.04 with the
-ROS 2 apt repository configured, run:
+Use Ubuntu 24.04 / ROS 2 Jazzy and the latest `main` of Transport, Hand Python and
+this repository. Install and build all ROS packages with the same system Python.
 
-Use Ubuntu’s system Python to create the environment so it matches the ROS
-Python ABI; the build command also selects that interpreter explicitly.
+1. [Install and build](linkerbot_hand_ros/docs/getting_started.md).
+2. [Prepare the adapter](linkerbot_hand_ros/docs/connection.md), then launch one hand:
 
-```bash
-sudo apt update
-sudo apt install -y \
-  git can-utils python3-venv python3-rosdep \
-  python3-colcon-common-extensions ros-jazzy-ros-base
+   ```bash
+   ros2 launch linkerbot_hand_ros hand.launch.py discover:=true
+   ```
 
-if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
-  sudo rosdep init
-fi
-rosdep update
+3. In another configured terminal, read the first angle sample:
 
-source /opt/ros/jazzy/setup.bash
-/usr/bin/python3 -m venv --system-site-packages ~/venvs/linkerbot-hand-ros
-source ~/venvs/linkerbot-hand-ros/bin/activate
-python -m pip install --upgrade pip
-mkdir -p ~/linkerbot_deps
-cd ~/linkerbot_deps
-git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-transport.git linkerbot-transport
-git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand.git linkerbot-hand
-python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
+   ```bash
+   ros2 topic echo --once /linkerbot_hand/state/angles
+   ```
 
-mkdir -p ~/linkerbot_ws/src
-cd ~/linkerbot_ws/src
-git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand-ros2.git linkerbot-hand-ros
+[User manual](linkerbot_hand_ros/README.md) ·
+[Model guide](linkerbot_hand_ros/docs/models.md) ·
+[ROS API](linkerbot_hand_ros/docs/ros_api.md) ·
+[Update sources](linkerbot_hand_ros/docs/update.md)
 
-cd ~/linkerbot_ws
-rosdep install --from-paths src --ignore-src -y --rosdistro jazzy
-python -m colcon build --symlink-install \
-  --cmake-args -DPython3_EXECUTABLE="$(command -v python)"
-source ~/linkerbot_ws/install/setup.bash
-
-python - <<'PY'
-from importlib.metadata import version
-
-import linkerbot_hand
-import linkerbot_transport
-
-print("linkerbot-transport", version("linkerbot-transport"))
-print("linkerbot-hand", version("linkerbot-hand"))
-print("python imports: OK")
-PY
-ros2 pkg prefix linkerbot_hand_msgs
-ros2 pkg prefix linkerbot_hand_ros
-ros2 interface show linkerbot_hand_msgs/msg/HandJointCommand >/dev/null
-ros2 pkg executables linkerbot_hand_ros
-```
-
-Verification should report the installed Transport and Hand versions, workspace
-prefixes for both ROS packages, and executables including `hand_node`.
-The displayed version numbers are informational; source must come from `main`.
-These checks do not open a device or send CAN frames. In each new terminal, source the environments in
-this order:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-source ~/venvs/linkerbot-hand-ros/bin/activate
-source ~/linkerbot_ws/install/setup.bash
-```
-
-See the
-[official ROS 2 Jazzy installation guide](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
-to configure the ROS apt repository for the first time. The driver guide below
-covers real-device CAN setup, launch parameters, and runtime checks.
-
-See the [driver README](./linkerbot_hand_ros/README.md) for installation and
-usage. The [Chinese documentation](./linkerbot_hand_ros/README_zh.md) is also
-available.
+The O6 URDF slider GUI is documented in
+[`linkerbot_hand_gui/README.md`](./linkerbot_hand_gui/README.md). It uses the
+URDF and meshes from `linker-sim-assets`; install Git LFS and set
+`LINKERBOT_HAND_ASSETS_ROOT` before launching it.

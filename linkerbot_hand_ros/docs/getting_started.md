@@ -1,0 +1,111 @@
+# Install and read the first angles
+
+[简体中文](zh/getting_started.md) · [Manual](../README.md)
+
+## 1. Prepare ROS and Python
+
+These commands target Ubuntu 24.04 and ROS 2 Jazzy. First configure the apt repository
+using the [ROS installation guide](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html).
+Use Ubuntu's system Python with `--system-site-packages` so the environment can load ROS Python packages.
+
+```bash
+sudo apt update
+sudo apt install -y git can-utils python3-venv python3-rosdep \
+  python3-colcon-common-extensions python3-setuptools python3-wheel ros-jazzy-ros-base
+if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
+  sudo rosdep init
+fi
+rosdep update
+source /opt/ros/jazzy/setup.bash
+/usr/bin/python3 -m venv --system-site-packages ~/venvs/linkerbot-hand-ros
+source ~/venvs/linkerbot-hand-ros/bin/activate
+python -m pip install --upgrade pip
+```
+
+colcon uses Ubuntu-provided setuptools/wheel, exposed through `--system-site-packages`.
+
+## 2. Install the latest main sources
+
+Gitea access is required. Install Transport before Hand Python, then build ROS messages,
+driver and GUI together. Existing checkouts use the [update guide](update.md).
+
+```bash
+mkdir -p ~/linkerbot_deps
+cd ~/linkerbot_deps
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-transport.git linkerbot-transport
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/linker-bot/linkerbot-hand-python.git linkerbot-hand
+python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
+
+mkdir -p ~/linkerbot_ws/src
+cd ~/linkerbot_ws/src
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand-ros2.git linkerbot-hand-ros
+```
+
+The local directory `linkerbot-hand` contains the `linkerbot-hand-python` repository;
+its Python distribution is named `linkerbot-hand`.
+
+## 3. Build and verify
+
+```bash
+cd ~/linkerbot_ws
+rosdep install --from-paths src --ignore-src -y --rosdistro jazzy
+python -m colcon build --symlink-install \
+  --cmake-args -DPython3_EXECUTABLE="$(command -v python)"
+source ~/linkerbot_ws/install/setup.bash
+python -c 'import linkerbot_transport, linkerbot_hand; print("Python dependencies: OK")'
+ros2 pkg prefix linkerbot_hand_msgs
+ros2 pkg prefix linkerbot_hand_ros
+ros2 interface show linkerbot_hand_msgs/msg/HandJointCommand
+```
+
+The imports, package prefixes and interface definition should all resolve. This check
+performs no device I/O. Resolve every rosdep error; a `pkg_resources` deprecation warning alone is not a failure.
+CMake explicitly uses the active Python interpreter to match the ROS ABI.
+
+## 4. Load each terminal
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/venvs/linkerbot-hand-ros/bin/activate
+source ~/linkerbot_ws/install/setup.bash
+```
+
+## 5. Connect one hand
+
+[Prepare the communication interface](connection.md), power the hand and connect exactly one
+hand in the selected scope. Start the driver:
+
+```bash
+ros2 launch linkerbot_hand_ros hand.launch.py discover:=true
+```
+
+To restrict scanning, append `channels:=can0`. Zero, multiple or incomplete candidates
+cause an error. See [discovery](discovery.md) for multiple hands or vendor adapters.
+Discovery and activation read identity and state; these commands send no motion targets.
+
+In another terminal, load the same environment and read:
+
+```bash
+ros2 lifecycle get /linkerbot_hand
+ros2 topic echo --once /linkerbot_hand/capabilities
+ros2 topic echo --once /linkerbot_hand/state/angles
+```
+
+Expect `active`, `identity.verified=true` and angle `meta.valid=true`, `stale=false`.
+`joint_names` defines vector order; raw, percent and physical radians have separate validity masks.
+
+## 6. Finish or continue
+
+Stop applications producing targets, then release the driver connection:
+
+```bash
+ros2 lifecycle set /linkerbot_hand deactivate
+ros2 lifecycle set /linkerbot_hand cleanup
+```
+
+Exit launch with Ctrl+C. Deactivation alone retains the connection; cleanup closes it.
+Continue with [model features](models.md), [command examples](examples.md), or the
+[O6 GUI](../../linkerbot_hand_gui/README.md).
