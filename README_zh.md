@@ -7,16 +7,18 @@
 
 ## 快速启动
 
-未发布的统一触觉支持及各型号对应关系见[触觉字段指南](linkerbot_hand_ros/docs/zh/force.md)。
-该功能需要安装含统一触觉接口的最新 Hand SDK 源码，并重建 ROS 消息和所有消费者；
-电流/转矩接口也需要匹配的新 SDK 源码：电流限制统一使用 `current_limits`，O30 独立的
-转矩限制使用 `torques_limits`，详见[迁移表](linkerbot_hand_ros/docs/zh/ros_api.md#按需读取配置与限制状态)。
-下方 v2.0.0 命令对应既有正式版本。
+最新 `main` 的统一触觉字段及各型号能力见[触觉字段指南](linkerbot_hand_ros/docs/zh/force.md)。
+电流限制使用 `current_limits`，O30 独立的转矩限制使用 `torques_limits`，详见
+[电流与转矩接口](linkerbot_hand_ros/docs/zh/ros_api.md#按需读取配置与限制状态)。
+下方命令从三个仓库的最新 `main` 分支安装。
 
 完整依赖链为
 `linkerbot-transport -> linkerbot-hand -> linkerbot_hand_msgs/linkerbot_hand_ros`。
-Transport 和 Hand 使用已发布 Python 包；两个 ROS package 从同一个签名 `v2.0.0` tag
-通过 `colcon` 构建。以下命令适用于已经配置 ROS 2 apt 软件源的 Ubuntu 24.04：
+Transport 和 Hand 从源码安装；ROS package 从同一个 `main` 源码目录通过 `colcon` 构建。
+以下命令适用于已经配置 ROS 2 apt 软件源的 Ubuntu 24.04：
+
+使用 Ubuntu 系统 Python 创建虚拟环境，以匹配 ROS 的 Python ABI；构建命令也显式指定
+当前环境的解释器，避免 CMake 选到另装的 Python 版本。
 
 ```bash
 sudo apt update
@@ -30,23 +32,26 @@ fi
 rosdep update
 
 source /opt/ros/jazzy/setup.bash
-python3 -m venv --system-site-packages ~/venvs/linkerbot-hand-ros-2.0.0
-source ~/venvs/linkerbot-hand-ros-2.0.0/bin/activate
+/usr/bin/python3 -m venv --system-site-packages ~/venvs/linkerbot-hand-ros
+source ~/venvs/linkerbot-hand-ros/bin/activate
 python -m pip install --upgrade pip
-python -m pip install \
-  --index-url https://gitea.linkerhub.work/api/packages/zhuzhixiang/pypi/simple \
-  --extra-index-url https://pypi.org/simple \
-  'linkerbot-transport[all]==1.0.0' \
-  'linkerbot-hand==2.0.0'
+mkdir -p ~/linkerbot_deps
+cd ~/linkerbot_deps
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-transport.git linkerbot-transport
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand.git linkerbot-hand
+python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
 
 mkdir -p ~/linkerbot_ws/src
 cd ~/linkerbot_ws/src
-git clone --branch v2.0.0 --depth 1 \
-  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand-ros.git
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand-ros2.git linkerbot-hand-ros
 
 cd ~/linkerbot_ws
-rosdep install --from-paths src --ignore-src -r -y --rosdistro jazzy
-python -m colcon build --symlink-install
+rosdep install --from-paths src --ignore-src -y --rosdistro jazzy
+python -m colcon build --symlink-install \
+  --cmake-args -DPython3_EXECUTABLE="$(command -v python)"
 source ~/linkerbot_ws/install/setup.bash
 
 python - <<'PY'
@@ -65,12 +70,13 @@ ros2 interface show linkerbot_hand_msgs/msg/HandJointCommand >/dev/null
 ros2 pkg executables linkerbot_hand_ros
 ```
 
-验证应显示 transport `1.0.0`、hand `2.0.0`、两个 ROS package 的工作空间安装前缀，以及
-`hand_node` 等可执行程序。该步骤不连接设备，也不会发送 CAN 帧。每个新终端依次执行：
+验证应显示实际安装的 Transport 和 Hand 版本、两个 ROS package 的工作空间安装前缀，
+以及 `hand_node` 等可执行程序。版本号仅用于诊断，依赖源码以最新 `main` 为准。
+该步骤不连接设备，也不会发送 CAN 帧。每个新终端依次执行：
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source ~/venvs/linkerbot-hand-ros-2.0.0/bin/activate
+source ~/venvs/linkerbot-hand-ros/bin/activate
 source ~/linkerbot_ws/install/setup.bash
 ```
 
@@ -80,6 +86,3 @@ ROS 2 apt 软件源的首次配置见
 
 安装、运行和接口说明见[驱动中文文档](./linkerbot_hand_ros/README_zh.md)，英文说明见
 [driver README](./linkerbot_hand_ros/README.md)。
-
-版本变更分别记录在 [`linkerbot_hand_msgs/CHANGELOG.rst`](./linkerbot_hand_msgs/CHANGELOG.rst)
-和 [`linkerbot_hand_ros/CHANGELOG.rst`](./linkerbot_hand_ros/CHANGELOG.rst)。

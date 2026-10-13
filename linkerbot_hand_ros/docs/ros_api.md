@@ -1,6 +1,6 @@
 # ROS 2 API Reference
 
-The driver exposes the Hand SDK 1.x contract through typed interfaces. Topic
+The driver exposes the latest Hand SDK `main` contract through typed interfaces. Topic
 arrays always follow channel names published in `~/capabilities`; there is no
 ROS model table.
 
@@ -66,13 +66,11 @@ To determine whether angle writes can provide feedback, find the `angles` entry
 in `~/capabilities.commands` and read `returns_current_state`. A true value means
 the response contains current state usable as feedback; it does not mean target
 echo, protocol ACK or mechanical arrival. The SDK rejects `command_feedback_only`
-with a nonzero angle rate if this flag is false. Use the connected SDK's declaration;
-the O30 command-feedback fix in Hand issue #148 also changes this value.
+with a nonzero angle rate if this flag is false. Use the connected SDK's declaration.
 
 Capability schema `1.5` includes this field, `force_fields`, `payload_projection`, and extended
-identity metadata, changing the ROSIDL types. Rebuild messages, driver, GUI and all
-external capability consumers together. Old and new message builds must not be
-mixed; checking the revision string does not provide wire compatibility.
+identity metadata. Build messages, driver, GUI and all external consumers with
+consistent ROSIDL definitions from the latest `main`.
 
 Runtime rate changes apply only after all ROS parameter validators accept and
 ROS commits the values. Later validation rejection has no SDK/timer side
@@ -174,7 +172,7 @@ is not measured physical torque. Current limits (`0x02`) and live current
 Read the force capability's `payload_projection`: `tactile_matrix` selects
 `state/tactile`, `tactile_descriptor` selects `state/tactile_sensors` and the
 optional resultant projection, and `raw_vector` selects `state/force`. Six current
-models use matrices; O30 uses descriptors; none uses the legacy scalar projection.
+models use matrices; O30 uses descriptors; none uses the `raw_vector` projection.
 `HandCommandClient.telemetry_capability("force")` returns copied metadata or None
 when absent/disabled; it does not query the device or prove driver readiness.
 
@@ -192,11 +190,9 @@ O30 descriptor fields share one physical query at the maximum requested rate;
 each sample contains the fields actually provided by those sensors. Independent
 models query separately. ROS adds no CAN queries and
 never sums matrix values to manufacture resultants. See the
-[complete force guide](zh/force.md). Install the SDK source with unified force
-support until the next package release, and rebuild all ROS message consumers.
-Sensor `maximum_rows/maximum_columns` replace the old `rows/columns` fields.
-They and `requested_rows/requested_columns` preserve device metadata without
-reshaping fields. Actual byte ranges and element counts come from the descriptor.
+[complete force guide](zh/force.md).
+Sensor `maximum_rows/maximum_columns` and `requested_rows/requested_columns`
+preserve device metadata without reshaping fields. Actual byte ranges and element counts come from the descriptor.
 Selector, availability, position mode and rectangle-fill flag are preserved.
 An absent sensor has empty fields/bytes, not fabricated zero measurements. FnS is
 not recomputed by summing matrix cells and is not converted to newtons.
@@ -325,9 +321,7 @@ models expose none of these services or driver subscriptions.
 ## On-Demand Raw Reads
 
 Stall output uses `hold_current` for every supported model, including L20Lite C7.
-The old `hold_torque/has_hold_torque` fields are removed in schema 1.5; rebuild
-messages, driver, GUI and external consumers together. L20Lite exposes all three
-stall setter services using the shared FIFO. Its state contains confirmed write
+L20Lite exposes all three stall setter services using the shared FIFO. Its state contains confirmed write
 echoes with original metadata, and no `get_stall_protection` read service exists.
 
 The `GetRawValues` endpoints above are registered during configure when the
@@ -364,13 +358,12 @@ or replace the limit cache, and limit writes do not replace measured current.
 If a later write fails in the same connection generation, the previous valid
 echo remains readable with its original metadata; it does not confirm the failed
 target. Recovery invalidates that cache until a new complete write reply arrives.
-Use Hand SDK source with O6 current/limit isolation. Both channels retain raw
-counts and the SDK's conflicting scale notes; ROS does not convert them to mA.
+Both channels retain raw counts and the SDK's conflicting scale notes;
+ROS does not convert them to mA.
 
 L20/L20Lite publish live current on `~/state/currents`, polled with `current_hz`,
 and retain `device_measured=true`. L20 has no current-limit readback service.
-With the Hand SDK source that isolates L20Lite setting echoes, L20Lite exposes
-`~/get_configured_speeds` and `~/get_current_limits` as `command_response` caches.
+L20Lite exposes `~/get_configured_speeds` and `~/get_current_limits` as `command_response` caches.
 Its `~/command/speeds` and `~/command/current_limits` finish as `ACKNOWLEDGED`
 only after both valid write replies arrive. Their actual returned values publish
 to `~/state/configured_speeds` and `~/state/current_limits` with
@@ -378,23 +371,27 @@ to `~/state/configured_speeds` and `~/state/current_limits` with
 These service calls send no device request and preserve sample sequence and time;
 before a complete echo exists they return `unsupported_operation` and invalid state.
 Live speed/current queries and polling remain independent of setting echoes.
-Use a Hand SDK containing the L20Lite setting-echo cache support for this behavior.
-No ROS message change is required.
+
 O30 publishes measured current and torque on `~/state/currents` and
 `~/state/torques`, using `current_hz` and `torques_hz` respectively. Its two limit
 objects use `~/get_current_limits` and `~/get_torques_limits`, updating the
 corresponding limit state topics. All values and scale metadata come from the SDK.
 
-The old `effort_limits` names are removed:
+Current and torque limits use the following interfaces; select them using the
+connected device's capabilities:
 
-| Model | Former effort command/client method | Former effort state/read service |
+| Model | Limit command/client method | State/read service |
 | --- | --- | --- |
+| O6 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits`, command-response cache |
+| L6 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits`, device query |
 | L20 | `current_limits` / `set_current_limits()` | `currents` with `current_hz`; no limit readback |
 | L20Lite | `current_limits` / `set_current_limits()` | Live `currents` with `current_hz`; separate `current_limits` state/getter retains complete write echoes without querying |
 | O20 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits` |
+| L30 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits`, local command cache |
+| O30 | `current_limits` / `set_current_limits()` | `current_limits` / `get_current_limits` |
 | O30 | `torques_limits` / `set_torques_limits()` | `torques_limits` / `get_torques_limits` |
 
-O30's existing 0x04 current interfaces remain independent of 0x06 torque.
+O30's 0x04 current interfaces are independent of 0x06 torque.
 L6 declares the raw `set_torques()` output/mode command described above. O30's
 torque-limit command does not enable that command; command and telemetry
 capabilities remain independent.

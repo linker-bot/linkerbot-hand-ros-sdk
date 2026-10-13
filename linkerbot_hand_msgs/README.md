@@ -1,8 +1,8 @@
 # linkerbot_hand_msgs
 
 `linkerbot_hand_msgs` contains transport-neutral ROS 2 interfaces for the
-Linkerbot Hand SDK 1.0 contract. It has no runtime dependency on `rclpy`, the Python
-Hand SDK, or a specific hand model.
+latest Linkerbot Hand SDK `main` contract. It has no runtime dependency on
+`rclpy`, the Python Hand SDK, or a specific hand model.
 
 The value representation is always explicit:
 
@@ -44,16 +44,13 @@ response contains current device state usable as feedback. It is independent of
 `ack_support`, is not a target echo, and does not indicate mechanical arrival.
 The `angles` command's flag gates the SDK's `command_feedback_only` policy.
 
-The unreleased capability schema is `1.5`. It includes named tactile field capabilities, command feedback support,
-`TelemetryCapability.payload_projection` and extended identity metadata. These
-fields change the ROSIDL types of capabilities and device info. Rebuild the
-message package, driver, GUI and external capability consumers together; a schema
-revision string cannot make old and new wire types compatible. Under this
-repository's release policy, this requires a major release; package versions
-remain at the last release until release preparation.
+The capability schema is `1.5`. It includes named tactile field capabilities,
+command feedback support, `TelemetryCapability.payload_projection` and extended
+identity metadata. Build the message package, driver, GUI and external consumers
+with consistent ROSIDL definitions from the latest `main`.
 
-`HandTactileSensor` now uses `maximum_rows/maximum_columns` in place of
-`rows/columns`, and preserves `selected_sensor`, `available`, requested rows/columns,
+`HandTactileSensor` provides `maximum_rows/maximum_columns`,
+`selected_sensor`, `available`, requested rows/columns,
 position mode and rectangle fill. Neither maximum nor requested dimensions imply
 the size/order of a descriptor field: use `descriptor`, `fields` and `raw_bytes`.
 Unavailable sensors retain their finger identity with empty fields/bytes; they are
@@ -70,7 +67,7 @@ For the force capability, `payload_projection` selects the publication contract:
 | `raw_vector` | `state/force` | `HandTelemetry` |
 
 Six current models use matrices; O30 uses descriptors. No current model declares
-the legacy scalar force projection. L20Lite also exposes independent fns/fts/fds/px
+the `raw_vector` force projection. L20Lite also exposes independent fns/fts/fds/px
 scalar fields. All projections retain their own physical query's metadata.
 
 `HandForceField` carries one named fn/fns/ft/fts/fd/fds/px field with per-sensor
@@ -91,21 +88,16 @@ and `phase_b_over_current`. L20 exposes `motor_communication_abnormal`,
 `soft_rotor_lock`, `motor_self_test_abnormal`, `motor_stall`, and
 `motor_rotor_lock` alongside its existing temperature, voltage and current flags.
 These are separate meanings, not aliases of generic overtemperature or stall.
-The flags use the SDK names; `raw`, `reserved_bits` and `descriptions` remain
-unchanged. This adds fields to the nested fault wire type: rebuild messages,
-driver and all `HandFaultStatusState` consumers together before exchanging it.
+The flags use the SDK names; `raw`, `reserved_bits` and `descriptions` preserve
+the protocol byte, unassigned bits and explanations.
 
 `StallProtectionCapability.hold_current/has_hold_current` describe the shared
-post-stall current setting, including L20Lite C7. The obsolete
-`hold_torque/has_hold_torque` fields are removed. L20Lite exposes confirmed write
+post-stall current setting, including L20Lite C7. L20Lite exposes confirmed write
 echoes only; `read_supported=false` does not remove the available setter.
 
 中文约定：普通 `raw` 字段始终表示设备协议原值，不做物理单位换算；`percent` 仅表示
 SDK capability 定义的 `0..100` 映射。屈伸轴为 `0=弯曲，100=伸直`，侧摆和旋转轴的
 两端方向由对应 `PercentMapping` 明确给出。
-
-See [CHANGELOG.rst](CHANGELOG.rst) for interface changes. Every pull request
-that changes a public message or service must update its `Unreleased` section.
 
 `GetRawValues` reads the raw channel selected by its service endpoint:
 `~/get_configured_speeds`, `~/get_configured_accelerations`,
@@ -117,6 +109,4 @@ The SDK `read_mode` determines whether the call queries the device or returns
 the last valid command response/cache without I/O. Cached samples retain their
 original sequence, source and collection time, and may already be stale;
 `success=true` alone does not imply a fresh device measurement. Raw values,
-units, confidence and sample metadata remain separate. These endpoints reuse
-the same service fields; the command-capability wire change described above
-still requires rebuilding all consumers.
+units, confidence and sample metadata remain separate.

@@ -37,7 +37,8 @@ O6 右手拇指关节的官方 GLB 有一个缺少颜色参数的材质槽；GUI
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source ~/code/linkerbot-hand-ros/install/setup.bash
+source ~/venvs/linkerbot-hand-ros/bin/activate
+source ~/linkerbot_ws/install/setup.bash
 export LINKERBOT_HAND_ASSETS_ROOT=~/linker-sim-assets/src/linker_robot_assets/assets
 export QT_QPA_PLATFORM=xcb
 

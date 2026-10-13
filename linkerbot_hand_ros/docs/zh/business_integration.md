@@ -9,7 +9,7 @@
 业务控制器
   -> HandCommandClient + linkerbot_hand_msgs
   -> linkerbot_hand Lifecycle 驱动
-  -> HandDevice 1.x polling/scheduler/cache
+  -> HandDevice (main) polling/scheduler/cache
   -> linkerbot-transport
 ```
 

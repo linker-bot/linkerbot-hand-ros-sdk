@@ -16,7 +16,7 @@ activate failed: [identity_mismatch] ... (node=/left_hand/linkerbot_hand backend
 ### 配置或文件错误
 
 - `discovery_config=...` 指向高级扫描设置；`deployment_config=...` 指向可复用部署。`hands[0]` 为从 0 开始的列表位置，后面的 namespace 定位角色。检查未知/重复字段、参数类型、namespace 和接口冲突。
-- 高级设置须用 `discovery_config`，schema/version 1 的部署须用 `config`，不能作为 ROS `--params-file`。保留旧 ROS 参数文件和 launch substitution 的原用法。
+- 高级设置须用 `discovery_config`，schema/version 1 的部署须用 `config`，不能作为 ROS `--params-file`。ROS 参数文件支持 launch substitution。
 - `output already exists` 在扫描前拒绝；复用文件使用 `config:=...`，重新发现使用新的 output 路径。写失败时检查父目录存在及写权限，不删除原文件来绕过保护。
 
 ### `unavailable`：指定接口没有枚举到
@@ -94,13 +94,16 @@ ros2 pkg executables linkerbot_hand_ros
 python3 -c 'import sys, linkerbot_hand; print(sys.executable); print(linkerbot_hand.__file__)'
 ```
 
-安装 1.x：
+从最新 `main` 安装 Transport 和 Hand SDK（已有源码目录时按[快速入门](getting_started.md)更新）：
 
 ```bash
-python3 -m pip install \
-  --index-url https://gitea.linkerhub.work/api/packages/zhuzhixiang/pypi/simple \
-  --extra-index-url https://pypi.org/simple \
-  'linkerbot-hand==2.0.0'
+mkdir -p ~/linkerbot_deps
+cd ~/linkerbot_deps
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-transport.git linkerbot-transport
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand.git linkerbot-hand
+python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
 ```
 
 开发源码：
@@ -109,7 +112,7 @@ python3 -m pip install \
 python3 -m pip install -e /path/to/linkerbot-transport -e /path/to/linkerbot-hand
 ```
 
-旧 0.x 包不提供本驱动需要的 `HandDevice` 1.x 类型契约。
+请使用最新 `main` 源码提供的 `HandDevice` 类型契约。
 
 ## configure 失败
 
@@ -167,7 +170,7 @@ frame、route miss 和 bus error。`publish_rate_hz` 只影响无新 revision �
 不会提高或降低 SDK 查询；新缓存 revision 会立即唤醒发布线程。触觉是完整多帧事务，
 角度+触觉上限需用 benchmark 实测。
 
-## 旧固件缺少个别查询
+## 固件不支持个别查询
 
 订阅最新 transient-local capability，检查 `firmware_unsupported_telemetry`。SDK 对标为可选
 的查询连续 3 次超时或结构不符后，只禁用该语义并保持连接；中间任一次成功会清零失败计数。

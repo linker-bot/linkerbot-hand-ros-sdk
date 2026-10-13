@@ -15,7 +15,7 @@ setup(
         ("share/ament_index/resource_index/packages", [f"resource/{PACKAGE_NAME}"]),
         (
             f"share/{PACKAGE_NAME}",
-            ["package.xml", "README.md", "README_zh.md", "CHANGELOG.rst"],
+            ["package.xml", "README.md", "README_zh.md"],
         ),
         (f"share/{PACKAGE_NAME}/launch", glob("launch/*.launch.py")),
         (f"share/{PACKAGE_NAME}/config", glob("config/*.yaml")),
@@ -25,7 +25,7 @@ setup(
     install_requires=[
         "setuptools",
         "PyYAML>=6",
-        "linkerbot-hand>=2.0.0,<3.0.0",
+        "linkerbot-hand",
     ],
     extras_require={"test": ["pytest"]},
     python_requires=">=3.10",
@@ -38,10 +38,6 @@ setup(
     license="Apache-2.0",
     url="https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand-ros",
     project_urls={
-        "Changelog": (
-            "https://gitea.linkerhub.work/zhuzhixiang/"
-            "linkerbot-hand-ros/src/branch/main/linkerbot_hand_ros/CHANGELOG.rst"
-        ),
         "Documentation": (
             "https://gitea.linkerhub.work/zhuzhixiang/"
             "linkerbot-hand-ros/src/branch/main/linkerbot_hand_ros/README_zh.md"

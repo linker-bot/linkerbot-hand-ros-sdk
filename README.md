@@ -7,18 +7,20 @@ This repository contains two independently discoverable ROS 2 packages:
 
 ## Quick Start
 
-The unreleased [unified tactile interface](linkerbot_hand_ros/docs/zh/force.md)
-requires the latest Hand SDK source and a rebuild of ROS messages and consumers.
-The unreleased current/torque API also requires the matching SDK source:
-use `current_limits` for electrical limits and O30-only `torques_limits` for its
-separate torque-limit object. See the [migration table](linkerbot_hand_ros/docs/ros_api.md#on-demand-raw-reads).
-The v2.0.0 commands below install the existing release.
+The [unified tactile guide](linkerbot_hand_ros/docs/zh/force.md) describes field topics
+and model capabilities on the latest `main`. Use `current_limits` for electrical
+limits and O30-only `torques_limits` for its separate torque-limit object. See the
+[current/torque API](linkerbot_hand_ros/docs/ros_api.md#on-demand-raw-reads).
+The commands below install the latest `main` branches of all three repositories.
 
 The complete dependency chain is
 `linkerbot-transport -> linkerbot-hand -> linkerbot_hand_msgs/linkerbot_hand_ros`.
-Transport and Hand use published Python packages, while both ROS packages are
-built with `colcon` from the same signed `v2.0.0` tag. On Ubuntu 24.04 with the
+Transport and Hand are installed from source, while the ROS packages are
+built together with `colcon` from the same `main` checkout. On Ubuntu 24.04 with the
 ROS 2 apt repository configured, run:
+
+Use Ubuntu’s system Python to create the environment so it matches the ROS
+Python ABI; the build command also selects that interpreter explicitly.
 
 ```bash
 sudo apt update
@@ -32,23 +34,26 @@ fi
 rosdep update
 
 source /opt/ros/jazzy/setup.bash
-python3 -m venv --system-site-packages ~/venvs/linkerbot-hand-ros-2.0.0
-source ~/venvs/linkerbot-hand-ros-2.0.0/bin/activate
+/usr/bin/python3 -m venv --system-site-packages ~/venvs/linkerbot-hand-ros
+source ~/venvs/linkerbot-hand-ros/bin/activate
 python -m pip install --upgrade pip
-python -m pip install \
-  --index-url https://gitea.linkerhub.work/api/packages/zhuzhixiang/pypi/simple \
-  --extra-index-url https://pypi.org/simple \
-  'linkerbot-transport[all]==1.0.0' \
-  'linkerbot-hand==2.0.0'
+mkdir -p ~/linkerbot_deps
+cd ~/linkerbot_deps
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-transport.git linkerbot-transport
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand.git linkerbot-hand
+python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
 
 mkdir -p ~/linkerbot_ws/src
 cd ~/linkerbot_ws/src
-git clone --branch v2.0.0 --depth 1 \
-  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand-ros.git
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand-ros2.git linkerbot-hand-ros
 
 cd ~/linkerbot_ws
-rosdep install --from-paths src --ignore-src -r -y --rosdistro jazzy
-python -m colcon build --symlink-install
+rosdep install --from-paths src --ignore-src -y --rosdistro jazzy
+python -m colcon build --symlink-install \
+  --cmake-args -DPython3_EXECUTABLE="$(command -v python)"
 source ~/linkerbot_ws/install/setup.bash
 
 python - <<'PY'
@@ -67,14 +72,15 @@ ros2 interface show linkerbot_hand_msgs/msg/HandJointCommand >/dev/null
 ros2 pkg executables linkerbot_hand_ros
 ```
 
-Verification should report transport `1.0.0` and hand `2.0.0`, workspace prefixes
-for both ROS packages, and executables including `hand_node`. It does not open
-a device or send CAN frames. In each new terminal, source the environments in
+Verification should report the installed Transport and Hand versions, workspace
+prefixes for both ROS packages, and executables including `hand_node`.
+The displayed version numbers are informational; source must come from `main`.
+These checks do not open a device or send CAN frames. In each new terminal, source the environments in
 this order:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source ~/venvs/linkerbot-hand-ros-2.0.0/bin/activate
+source ~/venvs/linkerbot-hand-ros/bin/activate
 source ~/linkerbot_ws/install/setup.bash
 ```
 
@@ -86,7 +92,3 @@ covers real-device CAN setup, launch parameters, and runtime checks.
 See the [driver README](./linkerbot_hand_ros/README.md) for installation and
 usage. The [Chinese documentation](./linkerbot_hand_ros/README_zh.md) is also
 available.
-
-Release histories are maintained in
-[`linkerbot_hand_msgs/CHANGELOG.rst`](./linkerbot_hand_msgs/CHANGELOG.rst) and
-[`linkerbot_hand_ros/CHANGELOG.rst`](./linkerbot_hand_ros/CHANGELOG.rst).

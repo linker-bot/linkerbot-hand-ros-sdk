@@ -2,7 +2,7 @@
 
 启动可选择手工参数、单手 `discover:=true`、多手发现及生成文件复用。
 扫描发生在启动准备阶段，configure 仍保持零设备 I/O；详见
-[自动发现指南](discovery.md)。新发现型 YAML 与下面的旧 ROS 参数 YAML 均受支持。
+[自动发现指南](discovery.md)。发现部署 YAML 与下面的 ROS 参数 YAML 均受支持。
 
 ## Lifecycle 行为
 
@@ -46,23 +46,23 @@ ros2 lifecycle set /linkerbot_hand activate
 | `recovery_retry_delay_s` | `0.2` | 响应超时后重试前的最小接收静默间隔；正数 |
 
 响应超时从该阶段整批请求发送完成开始计时，完整回复提前到达即结束等待。
-`transaction_timeout_s=0.0` 在 ROS 适配层转换为 SDK 的 `None`，需要搭配支持可选
-事务超时的 Hand SDK；SDK 直接调用应使用 `None`，不接受 `0`。该参数覆盖 baseline、
+`transaction_timeout_s=0.0` 在 ROS 适配层转换为 SDK 的 `None`；
+直接调用 SDK 时应使用 `None`，不接受 `0`。该参数覆盖 baseline、
 主动查询、轮询和需要回复的命令，保留协议发送间隔及无需回复命令的行为，不增加重试。
 身份阶段使用独立的 `identity_timeout_s`。管理服务的 `timeout_s` 仍是调用者等待预算，
 不代表单阶段响应时间，也不因为等待超时而取消 SDK 后台恢复。
 
-恢复策略参数只能在未配置状态下修改，需要支持这些配置的 Hand SDK。仅身份和 baseline
+恢复策略参数只能在未配置状态下修改。仅身份和 baseline
 的响应超时允许重试；身份不匹配、协议错误和写入不重试。实际静默窗口取配置、失败阶段
 响应窗口和协议隔离窗口的最大值，收到本设备的帧会重新计时，整轮仍受总预算限制。
 无请求序号协议无法识别超出静默窗口的任意迟到旧帧，可按现场最大延迟增大间隔。
 服务等待超时不取消共享恢复；达到恢复执行截止后不提交成功。底层阻塞 I/O 不能强制
 抢占，SDK 在返回后复核截止。开启自动重连时，失败后仍可按退避策略另起有界的一轮。
 
-型号解析使用 Hand SDK 的统一规则：配置填写 `o30`、`l20`，历史名称 `o30i`、`l25`
-不是配置别名，不能用完整产品编号替代 `model`。采用该规则的 SDK 会在 configure
-参数校验阶段拒绝这些值。设备上报的旧 `O30i-...`、`L25-...` 等编号仍可被 SDK
-识别，消息中的 `model` 使用规范型号，`product_code` 原样保留设备上报的编号。
+型号解析使用 Hand SDK 的统一规则：`model` 填写 `o6`、`l6`、`l20lite`、`l20`、
+`o20`、`o30` 或 `l30`，大小写不敏感，L20Lite 也接受 `l20-lite`。不能用完整产品编号
+替代型号。SDK 在 configure 阶段校验配置；
+消息中的 `model` 使用规范型号，`product_code` 原样保留设备上报的编号。
 
 ## 动态轮询与发布
 
@@ -159,8 +159,7 @@ Linux SocketCAN，classic CAN 和 CAN FD 均由 capability 决定：
 {"backend":"vendor_canfd","device_index":0,"channel_index":0,"library_path":"/path/to/lib.so"}
 ```
 
-未知 backend、缺失必填键或多余键均为配置错误。旧
-`transport_options_json/interface_name/interface_type/library_path` 参数已删除。
+`transport_json` 按 backend 提供连接配置；未知 backend、缺失必填键或多余键均为配置错误。
 
 ## 多设备
 

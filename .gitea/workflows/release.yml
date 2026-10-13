@@ -1,20 +1,7 @@
 name: Release
 
-# A release here is a signed tag plus a Gitea Release, and nothing is uploaded —
-# the documented install path is ``git clone --branch v<version>`` plus
-# ``colcon build``, because ``linkerbot_hand_msgs`` is a ROSIDL interface with no
-# platform-independent wheel. So what CI can usefully do on a tag push is confirm
-# the tag landed on a commit that is actually consistent with it.
-#
-# That is the failure it catches. The 2.0.0 tag was pushed while the
-# documentation fix was still unmerged, so it pointed at a commit whose docs said
-# 1.0.0. The tag had to be deleted from the remote and redone.
-#
-# The remaining gates are not run here: they need ROS jazzy and colcon-built
-# messages for this repository's pytest suite, while the available runners are
-# plain ubuntu images with no ROS. A job needing them would not queue waiting for
-# capacity, it would fail. Those gates run locally before the tag is pushed, and
-# ``release.py tag`` creates the Release in the same step.
+# Optional source tags must match the package versions at that commit.
+# Full quality checks run locally with ROS Jazzy before an authorized release.
 on:
   push:
     tags: ["v*"]
@@ -28,9 +15,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Install tooling
-        run: python -m pip install packaging
 
       # The same script the local release flow runs, so there is one set of
       # gates rather than one here and another on a developer machine. Only the

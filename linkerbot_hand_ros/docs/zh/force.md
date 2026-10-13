@@ -1,8 +1,7 @@
 # 统一触觉字段
 
-本接口需要包含统一触觉功能的 Hand SDK 源码版本。正式包发布前，请从最新 Hand
-源码安装；旧的 2.0.0 发布包不包含这些字段。消息 schema 为 1.5，消息包、ROS
-驱动和订阅方需要一起重新构建。
+本指南描述最新 Hand SDK 和 ROS `main` 的统一触觉接口。能力消息 schema 为 `1.5`；
+消息包、ROS 驱动和订阅方使用一致的接口定义构建。
 
 每个字段发布到 `~/state/force_<字段>`，类型为 `HandForceField`。
 例如 `/linkerbot_hand/state/force_fn` 和 `/linkerbot_hand/state/force_fns`。
@@ -51,7 +50,7 @@ Fn/Ft 保留设备上报的力单位，Fd/Px 单位未确认时为空，不根�
 角度，也不由 ROS 解释成无效码；其特殊含义未确认，值的有效性只透传 SDK 的判定。
 
 此布局没有 FnS，不发布新的 `force_fns` 和 `normal_force_resultant`；不能把 Fn
-求和、改名或套用旧点阵结果生成合力。各字段共享同次采样的 sequence、采集时间和
+求和、改名或套用其他布局的点阵结果生成合力。各字段共享同次采样的 sequence、采集时间和
 连接代次。传感器布局切换后按更新的 capability 判断支持字段，不沿用旧布局的数据。
 话题仍存在不表示字段受支持，应同时检查 `support_known/supported` 和实际样本。
 
@@ -81,12 +80,14 @@ force_px_hz=5` 时也只产生最高 20 Hz 的同一查询，而非 50 Hz；返�
 中存在的字段，显式设置不支持字段的正频率会被拒绝。其他独立物理查询各自调度。
 频率是请求目标，仍受 CAN 带宽及事务耗时限制。
 
-`publish_rate_hz` 限制 ROS 缓存发布，采集时应至少达到所需最高字段频率，或设为 0
-启用缓存变化驱动。diagnostics 的 `force_<字段>_requested_hz/query_hz/achieved_hz`
+`publish_rate_hz` 控制无新数据时 age/stale 的缓存复查频率；设为 0 会停止 ROS 状态
+发布。启用发布时，SDK 缓存变化立即唤醒状态发布线程。diagnostics 的
+`force_<字段>_requested_hz/query_hz/achieved_hz`
 分别记录字段请求、物理查询目标和实际样本频率，`query_channel` 标明共享关系。
 不要把共享字段的频率或样本数相加估算总线负载；物理计数仍在 `channel_*` 中。
 
-旧 `state/tactile`、`state/tactile_sensors` 和 O30
-`state/normal_force_resultant` 继续提供原有视图。独立标量更新不会重发旧点阵或修改
-旧点阵采集时间；有效性/过期状态变化可能发布同一序号，统计采样率需按 generation
-和 sequence 去重。`state/force` 仍是原有 raw_vector 投影，不是上述字段的聚合话题。
+`state/tactile` 提供矩阵视图，`state/tactile_sensors` 提供 descriptor 视图；O30 的
+`state/normal_force_resultant` 提供同次查询中五指都有的标量 FnS。独立标量更新不会重发
+点阵缓存或修改其采集时间；有效性/过期状态变化可能发布同一序号，统计采样率需按 generation
+和 sequence 去重。`state/force` 对应 `raw_vector` 投影，当前没有型号声明该投影；
+它不是具名字段的聚合话题。

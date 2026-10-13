@@ -50,13 +50,16 @@ ROS publish Hz 则单独反映状态发布和 DDS 接收链路。diagnostics 同
 - 测试期间没有其他角度发布者或主动设备查询程序。
 - `command_rate_hz` 启动时不低于最高候选角度频率，并保留调度余量。
 - 总线 bitrate、终端电阻、设备 ID、急停和机械空间已单独验证。
-- 使用 Hand SDK 1.x 源码或发行包：
+- 使用 Transport 和 Hand SDK 最新 `main` 源码（已有目录时按[快速入门](getting_started.md)更新）：
 
 ```bash
-python3 -m pip install \
-  --index-url https://gitea.linkerhub.work/api/packages/zhuzhixiang/pypi/simple \
-  --extra-index-url https://pypi.org/simple \
-  'linkerbot-hand==2.0.0'
+mkdir -p ~/linkerbot_deps
+cd ~/linkerbot_deps
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-transport.git linkerbot-transport
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand.git linkerbot-hand
+python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
 ```
 
 启动示例：

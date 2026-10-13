@@ -3,12 +3,12 @@
 [English](README.md) | [简体中文](README_zh.md)
 
 ROS 2 Jazzy Lifecycle driver for Linkerbot O6, L6, L20Lite, L20, O20,
-O30, and L30 hands. The driver targets the single `HandDevice` 1.x API and
+O30, and L30 hands. The driver targets the public `HandDevice` API on the latest SDK `main` and
 uses the SDK capability object as its only model specification.
 
 See the [unified tactile guide](docs/zh/force.md) for field topics, model support
-and `force_<field>_hz` parameters. The unreleased interface requires the latest
-Hand SDK source and rebuilt ROS messages and consumers.
+and `force_<field>_hz` parameters. Install the latest Hand SDK `main` and build
+ROS messages, the driver and consumers from consistent interface definitions.
 
 The ownership boundary is strict:
 
@@ -19,7 +19,7 @@ The ownership boundary is strict:
 - diagnostics reads `get_health()` only;
 - deactivate stops polling while cleanup and shutdown close the device.
 
-There are no compatibility array topics or ROS-owned device query timers.
+ROS exposes typed topics and uses SDK polling for device queries.
 Protocol raw, percent, and physical-angle values remain separate in typed
 messages. Flexion percent uses `0=flexed/closed` and `100=extended/open`;
 directional axes use the endpoint labels published in `HandCapabilities`.
@@ -36,52 +36,55 @@ and FIFO behavior. Reading these parameters is on demand, without extra polling.
 
 - Ubuntu 24.04 and ROS 2 Jazzy
 - Python 3.10 or newer
-- `linkerbot-transport>=1.0.0,<2.0.0`
-- `linkerbot-hand>=2.0.0,<3.0.0`
+- `linkerbot-transport` (`main`)
+- `linkerbot-hand` (`main`)
 - a configured SocketCAN/CAN FD interface or supported vendor adapter
 
 First-time users can run the repository
 [quick start](../README.md#quick-start). For a manual installation, create an
 isolated environment that can read the system ROS packages and explicitly
-install both Transport and Hand:
+install both Transport and Hand from their latest `main` branches:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-python3 -m venv --system-site-packages ~/venvs/linkerbot-hand-ros-2.0.0
-source ~/venvs/linkerbot-hand-ros-2.0.0/bin/activate
-python -m pip install \
-  --index-url https://gitea.linkerhub.work/api/packages/zhuzhixiang/pypi/simple \
-  --extra-index-url https://pypi.org/simple \
-  'linkerbot-transport[all]==1.0.0' \
-  'linkerbot-hand==2.0.0'
+/usr/bin/python3 -m venv --system-site-packages ~/venvs/linkerbot-hand-ros
+source ~/venvs/linkerbot-hand-ros/bin/activate
+mkdir -p ~/linkerbot_deps
+cd ~/linkerbot_deps
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-transport.git linkerbot-transport
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand.git linkerbot-hand
+python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
 ```
 
-For unreleased 1.x development, install the independent source repositories
-into the same Python environment used by ROS:
+For existing clones, update both `main` branches before reinstalling:
 
 ```bash
-git clone ssh://git@git.linkerhub.work:12222/zhuzhixiang/linkerbot-transport.git
-git clone ssh://git@git.linkerhub.work:12222/zhuzhixiang/linkerbot-hand.git
-python -m pip install -e ./linkerbot-transport -e ./linkerbot-hand
-python -c 'import linkerbot_hand; print(linkerbot_hand.__file__)'
+git -C ~/linkerbot_deps/linkerbot-transport switch main
+git -C ~/linkerbot_deps/linkerbot-transport pull --ff-only origin main
+git -C ~/linkerbot_deps/linkerbot-hand switch main
+git -C ~/linkerbot_deps/linkerbot-hand pull --ff-only origin main
+python -m pip install -e "$HOME/linkerbot_deps/linkerbot-transport[all]" \
+  -e "$HOME/linkerbot_deps/linkerbot-hand"
 ```
 
 ## Build
 
 `linkerbot_hand_msgs` contains ROSIDL interfaces and must be generated for the
-installed ROS distribution; it is therefore delivered in the tagged ROS source
-release rather than inside the platform-independent driver wheel. Build both
-ROS packages from the same `v2.0.0` tag:
+installed ROS distribution. Build the ROS packages together from the same
+latest `main` checkout:
 
 ```bash
 mkdir -p ~/linkerbot_ws/src
 cd ~/linkerbot_ws/src
-git clone --branch v2.0.0 --depth 1 \
-  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand-ros.git
+git clone --branch main --depth 1 \
+  https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand-ros2.git linkerbot-hand-ros
 cd ~/linkerbot_ws
 source /opt/ros/jazzy/setup.bash
 rosdep install --from-paths src --ignore-src -y --rosdistro jazzy
-python -m colcon build --symlink-install
+python -m colcon build --symlink-install \
+  --cmake-args -DPython3_EXECUTABLE="$(command -v python)"
 source ~/linkerbot_ws/install/setup.bash
 
 python -c 'import linkerbot_transport, linkerbot_hand; print("Python dependencies: OK")'
@@ -89,6 +92,19 @@ ros2 pkg prefix linkerbot_hand_msgs
 ros2 pkg prefix linkerbot_hand_ros
 ros2 interface show linkerbot_hand_msgs/msg/HandJointCommand >/dev/null
 ros2 pkg executables linkerbot_hand_ros
+```
+
+For an existing ROS workspace, update its `main` checkout and rebuild all
+packages and downstream consumers after updating the SDK sources:
+
+```bash
+git -C ~/linkerbot_ws/src/linkerbot-hand-ros switch main
+git -C ~/linkerbot_ws/src/linkerbot-hand-ros pull --ff-only origin main
+cd ~/linkerbot_ws
+rosdep install --from-paths src --ignore-src -y --rosdistro jazzy
+python -m colcon build --symlink-install \
+  --cmake-args -DPython3_EXECUTABLE="$(command -v python)"
+source ~/linkerbot_ws/install/setup.bash
 ```
 
 Any unresolved rosdep key is an error. A `pkg_resources is deprecated` line
@@ -201,10 +217,7 @@ In `query_only`, command feedback remains in SDK cache and metrics but
 
 See [ROS API](docs/ros_api.md), the
 [Chinese integration guide](docs/zh/business_integration.md), and the
-[frequency benchmark guide](docs/zh/frequency_benchmark.md). Release history is
-maintained in [CHANGELOG.rst](CHANGELOG.rst); every user-facing pull request
-must update its `Unreleased` section. Message or service contract changes must
-also update `linkerbot_hand_msgs/CHANGELOG.rst`.
+[frequency benchmark guide](docs/zh/frequency_benchmark.md).
 
 ## Safety
 

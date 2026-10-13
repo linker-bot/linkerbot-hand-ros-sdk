@@ -1,6 +1,6 @@
 # 自动发现并复用启动配置
 
-保留手工 launch 和旧 ROS 参数 YAML。发现模式通过 Hand SDK 源码读取身份、关闭探测
+启动支持手工 launch、ROS 参数 YAML 和自动发现。发现模式通过 Hand SDK 读取身份、关闭探测
 连接，再用候选工厂构造节点。它不修改宿主 CAN 设置，不额外发送运动、使能、清错或
 标定命令。当前维护范围仍是一条物理 CAN/CAN FD 通道一只手。
 
@@ -59,19 +59,19 @@ ros2 launch linkerbot_hand_ros multi_hand.launch.py config:=./hands-lab.yaml
 已有文件在扫描前拒绝；文件原子写出，即使扫描期间别的进程先创建同名文件也不覆盖。
 必需写出失败时不激活。保存与激活分别报告：保存后激活仍可能失败，文件会保留。
 
-`config` 同时识别旧 ROS 参数 YAML 和新发现型部署。新文件包含
+`config` 同时识别 ROS 参数 YAML 和发现部署 YAML。发现部署文件包含
 `schema: linkerbot_hand_ros.discovery`、`version: 1`、`autostart`、`discovery`，以及
 `hands` 列表内的 `namespace`、`match`、`parameters`。
 未知版本/字段、重复键、namespace 或通道均拒绝。此文件须通过 launch 加载，不能
 直接作为 ROS `--params-file`。
 
 SDK 别名用于初始 namespace（如 `/l6l`），可在保存文件中编辑为业务角色。
-新多手发现将别名放到容器的 namespace 下：外层 `PushROSNamespace("/robot")`
+多手发现将别名放到容器的 namespace 下：外层 `PushROSNamespace("/robot")`
 对应 `/robot/l6l`、`/robot/o6r`，完整绝对路径只保存一次。
 已有文件在另一个父级 namespace 下加载时仍保持保存路径；迁移角色需编辑或重新生成。
 内部手节点防止容器进程的 `__node`/`__ns` 覆盖身份，同时保留全局参数
-（包括 `use_sim_time`）与主题 remap。旧 ROS 参数文件继续先执行 launch substitution
-再由 ROS 校验参数；新发现型部署使用静态 schema。
+（包括 `use_sim_time`）与主题 remap。ROS 参数文件先执行 launch substitution
+再由 ROS 校验参数；发现部署使用静态 schema。
 
 文件启动重新扫描保存的资源，唯一匹配保存的集合；新接入设备不自动加入，
 扫描别名编号变化不重排角色，缺失或身份不符不换手兜底。

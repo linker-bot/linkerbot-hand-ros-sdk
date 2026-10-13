@@ -180,10 +180,10 @@ def test_old_adapter_and_configuration_implementations_are_removed() -> None:
     assert not (PACKAGE_ROOT / "linkerbot_hand_ros/configuration.py").exists()
 
 
-def test_package_depends_on_hand_sdk_2_x() -> None:
+def test_package_depends_on_hand_sdk_without_version_pin() -> None:
     setup_source = (PACKAGE_ROOT / "setup.py").read_text(encoding="utf-8")
 
-    assert '"linkerbot-hand>=2.0.0,<3.0.0"' in setup_source
+    assert '"linkerbot-hand"' in setup_source
     assert '"linkerbot>=' not in setup_source
     assert '"linkerbot-transport' not in setup_source
 
@@ -258,6 +258,8 @@ def test_package_declares_ament_python_only_as_build_type() -> None:
 
 def test_rosdep_instructions_fail_on_unresolved_dependencies() -> None:
     documentation = (
+        PACKAGE_ROOT.parent / "README.md",
+        PACKAGE_ROOT.parent / "README_zh.md",
         PACKAGE_ROOT / "README.md",
         PACKAGE_ROOT / "README_zh.md",
         PACKAGE_ROOT / "docs/zh/getting_started.md",
@@ -274,20 +276,27 @@ def test_rosdep_instructions_fail_on_unresolved_dependencies() -> None:
         assert all(" -r " not in command for command in commands)
 
 
-def test_sdk_install_instructions_include_private_and_public_indexes() -> None:
+def test_sdk_install_instructions_use_main_sources() -> None:
     documentation = (
+        PACKAGE_ROOT.parent / "README.md",
+        PACKAGE_ROOT.parent / "README_zh.md",
         PACKAGE_ROOT / "README.md",
         PACKAGE_ROOT / "README_zh.md",
         PACKAGE_ROOT / "docs/zh/getting_started.md",
         PACKAGE_ROOT / "docs/zh/troubleshooting.md",
+        PACKAGE_ROOT / "docs/zh/frequency_benchmark.md",
     )
-    private_index = "https://gitea.linkerhub.work/api/packages/zhuzhixiang/pypi/simple"
-    public_index = "https://pypi.org/simple"
 
     for path in documentation:
         source = path.read_text(encoding="utf-8")
-        assert private_index in source
-        assert public_index in source
+        commands = source.replace("\\\n", "")
+        for package in ("linkerbot-transport", "linkerbot-hand"):
+            assert re.search(
+                rf"git clone --branch main --depth 1\s+https://\S+/{package}\.git",
+                commands,
+            ), path
+        assert "-e './linkerbot-transport[all]' -e ./linkerbot-hand" in source
+        assert not re.search(r"linkerbot-(?:hand|transport)(?:\[all\])?[<>=]", source)
 
 
 def test_python_and_ros_package_versions_match() -> None:
@@ -320,14 +329,3 @@ def test_python_and_ros_package_versions_match() -> None:
     # particular value. Asserting the literal here meant editing this test every
     # release; ``scripts/release.py`` reads the version and gates the release on
     # it instead.
-
-
-def test_each_ros_package_maintains_an_unreleased_changelog() -> None:
-    changelogs = (
-        PACKAGE_ROOT.parent / "linkerbot_hand_msgs/CHANGELOG.rst",
-        PACKAGE_ROOT / "CHANGELOG.rst",
-    )
-
-    for path in changelogs:
-        source = path.read_text(encoding="utf-8")
-        assert "Unreleased\n----------" in source
