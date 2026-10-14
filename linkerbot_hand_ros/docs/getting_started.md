@@ -2,27 +2,33 @@
 
 [简体中文](zh/getting_started.md) · [Manual](../README.md)
 
-## 1. Prepare ROS and Python
+## 1. Choose a ROS distribution and prepare the environment
 
-These commands target Ubuntu 24.04 and ROS 2 Jazzy. First configure the apt repository
-using the [ROS installation guide](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html).
-Use Ubuntu's system Python with `--system-site-packages` so the environment can load ROS Python packages.
+Choose the option matching your OS. The same latest `main` sources support both:
+
+- Ubuntu 22.04 / Python 3.10: use **ROS 2 Humble**, configure apt with the [Humble installation guide](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html), then run `export LINKERBOT_ROS_DISTRO=humble`.
+- Ubuntu 24.04 / Python 3.12: use **ROS 2 Jazzy**, configure apt with the [Jazzy installation guide](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html), then run `export LINKERBOT_ROS_DISTRO=jazzy`.
+
+Use the distribution matching the host OS; ROS binary packages must match the Ubuntu release.
+Use system Python and `--system-site-packages` to load that distribution's ROS packages.
+The commands below reuse your selection and keep a separate venv and workspace for each distribution.
 
 ```bash
 sudo apt update
 sudo apt install -y git can-utils python3-venv python3-rosdep \
-  python3-colcon-common-extensions python3-setuptools python3-wheel ros-jazzy-ros-base
+  python3-colcon-common-extensions python3-setuptools python3-wheel \
+  "ros-${LINKERBOT_ROS_DISTRO}-ros-base"
 if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
   sudo rosdep init
 fi
-rosdep update
-source /opt/ros/jazzy/setup.bash
-/usr/bin/python3 -m venv --system-site-packages ~/venvs/linkerbot-hand-ros
-source ~/venvs/linkerbot-hand-ros/bin/activate
+rosdep update --rosdistro "${LINKERBOT_ROS_DISTRO}"
+source "/opt/ros/${LINKERBOT_ROS_DISTRO}/setup.bash"
+/usr/bin/python3 -m venv --system-site-packages "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}"
+source "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}/bin/activate"
 python -m pip install --upgrade pip
 ```
 
-colcon uses Ubuntu-provided setuptools/wheel, exposed through `--system-site-packages`.
+colcon reuses Ubuntu-provided setuptools/wheel. Do not upgrade setuptools with pip in this build environment.
 
 ## 2. Install the latest main sources
 
@@ -38,8 +44,8 @@ git clone --branch main --depth 1 \
   https://gitea.linkerhub.work/linker-bot/linkerbot-hand-python.git linkerbot-hand
 python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
 
-mkdir -p ~/linkerbot_ws/src
-cd ~/linkerbot_ws/src
+mkdir -p "$HOME/linkerbot_${ROS_DISTRO}_ws/src"
+cd "$HOME/linkerbot_${ROS_DISTRO}_ws/src"
 git clone --branch main --depth 1 \
   https://gitea.linkerhub.work/linker-bot/linkerbot-hand-ros2.git linkerbot-hand-ros
 ```
@@ -55,12 +61,12 @@ Robot State Publisher. URDF and mesh assets are separate; prepare them using the
 resource instructions below.
 
 ```bash
-cd ~/linkerbot_ws
-rosdep install --from-paths src --ignore-src -y --rosdistro jazzy
-rosdep check --from-paths src --ignore-src --rosdistro jazzy
+cd "$HOME/linkerbot_${ROS_DISTRO}_ws"
+rosdep install --from-paths src --ignore-src -y --rosdistro "${ROS_DISTRO}"
+rosdep check --from-paths src --ignore-src --rosdistro "${ROS_DISTRO}"
 python -m colcon build --symlink-install \
   --cmake-args -DPython3_EXECUTABLE="$(command -v python)"
-source ~/linkerbot_ws/install/setup.bash
+source "$HOME/linkerbot_${ROS_DISTRO}_ws/install/setup.bash"
 python -c 'import linkerbot_transport, linkerbot_hand; print("Python dependencies: OK")'
 ros2 pkg prefix linkerbot_hand_msgs
 ros2 pkg prefix linkerbot_hand_ros
@@ -77,10 +83,13 @@ CMake explicitly uses the active Python interpreter to match the ROS ABI.
 
 ## 4. Load each terminal
 
+In each fresh terminal, select `export LINKERBOT_ROS_DISTRO=humble` or
+`export LINKERBOT_ROS_DISTRO=jazzy` before loading the environment below. Load only one ROS distribution per terminal.
+
 ```bash
-source /opt/ros/jazzy/setup.bash
-source ~/venvs/linkerbot-hand-ros/bin/activate
-source ~/linkerbot_ws/install/setup.bash
+source "/opt/ros/${LINKERBOT_ROS_DISTRO}/setup.bash"
+source "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}/bin/activate"
+source "$HOME/linkerbot_${ROS_DISTRO}_ws/install/setup.bash"
 ```
 
 ### Optional: prepare O6 GUI assets

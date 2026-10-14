@@ -1,0 +1,11 @@
+**
+!linkerbot_hand_msgs/
+!linkerbot_hand_msgs/package.xml
+!linkerbot_hand_ros/
+!linkerbot_hand_ros/package.xml
+!linkerbot_hand_gui/
+!linkerbot_hand_gui/package.xml
+!scripts/
+!scripts/docker/
+!scripts/docker/Dockerfile
+!scripts/docker/verify.sh

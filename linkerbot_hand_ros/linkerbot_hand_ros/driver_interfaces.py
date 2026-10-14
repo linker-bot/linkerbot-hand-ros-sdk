@@ -72,17 +72,11 @@ class DriverInterfaces:
         )
         self.capability_timer: Any | None = None
         self.diagnostic_timer: Any | None = None
-        try:
-            self._create()
-        except Exception:
-            try:
-                self.destroy()
-            except Exception as cleanup_error:
-                self._node.get_logger().error(
-                    "partial ROS interface cleanup failed: "
-                    f"{self._error_text(cleanup_error)}"
-                )
-            raise
+
+    def create(self) -> None:
+        """Allocate entities after the node has retained this cleanup owner."""
+
+        self._create()
 
     def activate(self, capabilities: DeviceCapabilities) -> None:
         """Enable admin work, command subscriptions, and cached publication."""
@@ -274,7 +268,7 @@ class DriverInterfaces:
             ]
 
     def destroy(self) -> None:
-        """Destroy all entities, attempting every owner even after one failure."""
+        """Drain every user before destroying entities, retaining failed owners."""
 
         errors: list[BaseException] = []
         try:
@@ -292,15 +286,18 @@ class DriverInterfaces:
         try:
             self._gate.close(self._configuration.device_config.shutdown_timeout_s)
         except BaseException as error:
-            # Destroying an entity a callback still uses lets rclpy re-raise
-            # InvalidHandle out of spin() and end the process. Keeping the
-            # entities and reporting the failure leaves the process serving.
             errors.append(error)
+        if self.management is not None:
+            try:
+                self.management.deactivate()
+            except BaseException as error:
+                errors.append(error)
+        if errors:
             raise LifecycleError(
-                "in-flight ROS callbacks did not finish; entities were kept alive",
+                "ROS workers or callbacks did not finish; entities were kept alive",
                 operation="destroy_ros_interfaces",
                 cause=errors[0],
-            ) from error
+            )
         for timer_name in (
             "capability_timer",
             "diagnostic_timer",
@@ -342,12 +339,14 @@ class DriverInterfaces:
             self._node,
             self._configuration.declared_capabilities,
         )
+        self.snapshot.create()
         self.commands = CommandInterface(
             self._node,
             device=self._device,
             is_active=self._is_active,
             on_accepted=self._metrics.record_command_success,
             on_error=self._record_command_error,
+            shutdown_timeout_s=self._configuration.device_config.shutdown_timeout_s,
         )
         self.management = ManagementInterface(
             self._node,
@@ -359,6 +358,7 @@ class DriverInterfaces:
             worker_capacity=(self._configuration.device_config.discrete_queue_capacity),
             gate=self._gate,
         )
+        self.management.create()
         self.diagnostic_publisher = self._node.create_publisher(
             DiagnosticArray,
             "/diagnostics",

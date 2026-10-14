@@ -11,16 +11,30 @@
 
 每个终端按顺序加载 ROS、venv、workspace：
 
+先设置 `export LINKERBOT_ROS_DISTRO=humble` 或 `export LINKERBOT_ROS_DISTRO=jazzy`。
+
 ```bash
-source /opt/ros/jazzy/setup.bash
-source ~/venvs/linkerbot-hand-ros/bin/activate
-source ~/linkerbot_ws/install/setup.bash
+source "/opt/ros/${LINKERBOT_ROS_DISTRO}/setup.bash"
+source "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}/bin/activate"
+source "$HOME/linkerbot_${ROS_DISTRO}_ws/install/setup.bash"
 ros2 pkg executables linkerbot_hand_ros
 python -c 'import sys, linkerbot_hand; print(sys.executable); print(linkerbot_hand.__file__)'
 ```
 
 不要混用 ROS 发行版或其他 Python 环境。包缺失按[安装](getting_started.md)构建；
 SDK 路径错误或更新后 ROSIDL 类型不一致，按[更新](update.md)重装源码并一起重建消费者。
+
+## DDS 崩溃或离线测试间歇超时
+
+在独立终端和空闲发现域运行离线测试，见[本地检查](../../../scripts/README.md)。
+驱动 pytest 默认设置 `ROS_DOMAIN_ID=87`、`ROS_LOCALHOST_ONLY=1`，保留显式设置，
+测试前检查域内是否已有其他 ROS 节点。并行 worker 使用不同域号。
+这是测试发现域隔离措施，不能据此确定原生 DDS 崩溃的根因。
+
+出现 `sequence size exceeds remaining buffer`、非预期 graph 节点或原生崩溃时，
+保留 ROS/RMW/Fast DDS 版本、域号、graph 和原生线程栈；Python 栈不能单独确定
+故障 DDS 线程。生产系统中需要通信的节点必须使用约定的同一域，变更时需同步
+所有通信方。隔离域的 fake 设备测试通过，不代表生产组网和实机行为已验证。
 
 ## configure 或 activate 失败
 
@@ -37,6 +51,11 @@ ros2 topic echo --once /diagnostics
 `identity_mismatch` 按实际连接身份排查；`unsupported_firmware` 按错误正文定位不支持的操作，
 不能仅凭错误码推断整台设备无可用 profile。关闭失败需先处理资源释放，再重试。
 静态参数需 deactivate、cleanup 后修改；流程见[配置](configuration.md)。
+
+如果清理报告 worker 或回调未退出，驱动会保留其 ROS 实体和 SDK 所有者。
+处理日志中的超时后重试 cleanup 或节点销毁；再次 configure 必须先成功释放上次配置，
+才会创建替代对象。清理未完成时会拒绝激活和参数修改。进程退出时先等待已提交的回调
+结束，再销毁实体；等待超时会报告清理未完成，不会强制释放仍被使用的资源。
 
 ## active 但没有状态，或状态频率低
 

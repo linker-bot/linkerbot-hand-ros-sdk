@@ -8,7 +8,7 @@
 
 ## 快速开始
 
-[安装与首组角度](docs/zh/getting_started.md)：准备 Jazzy 环境、安装源码、构建并读取设备状态。
+[安装与首组角度](docs/zh/getting_started.md)：选择 Humble 或 Jazzy 环境、安装源码、构建并读取设备状态。
 
 ## 连接设备
 

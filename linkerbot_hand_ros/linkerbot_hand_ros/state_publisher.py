@@ -77,10 +77,24 @@ class SnapshotPublisher:
             raise TypeError("capabilities must be DeviceCapabilities")
         self._node = node
         self._lock = threading.RLock()
-        plain_publishers = []
-        lifecycle_publishers = []
-        telemetry_publishers = {}
-        force_field_publishers = {}
+        self._declared_capabilities = capabilities
+        self._plain_publishers = []
+        self._lifecycle_publishers = []
+        self._telemetry_publishers = {}
+        self._force_field_publishers = {}
+        self._published: dict[str, object] = {}
+        self._published_capabilities: DeviceCapabilities | None = None
+        self._set_conversion_capabilities(capabilities)
+
+    def create(self) -> SnapshotPublisher:
+        """Allocate publishers after the driver has retained this owner."""
+
+        node = self._node
+        capabilities = self._declared_capabilities
+        plain_publishers = self._plain_publishers
+        lifecycle_publishers = self._lifecycle_publishers
+        telemetry_publishers = self._telemetry_publishers
+        force_field_publishers = self._force_field_publishers
         try:
             capabilities_publisher = node.create_publisher(
                 HandCapabilities,
@@ -194,10 +208,7 @@ class SnapshotPublisher:
                 )
                 lifecycle_publishers.append(fault_status_publisher)
         except Exception:
-            for publisher in reversed(lifecycle_publishers):
-                node.destroy_lifecycle_publisher(publisher)
-            for publisher in reversed(plain_publishers):
-                node.destroy_publisher(publisher)
+            self.destroy()
             raise
         self._capabilities_publisher = capabilities_publisher
         self._device_info_publisher = device_info_publisher
@@ -210,15 +221,7 @@ class SnapshotPublisher:
         self._force_resultant_publisher = force_resultant_publisher
         self._stall_publisher = stall_publisher
         self._fault_status_publisher = fault_status_publisher
-        # ``destroy()`` reuses the exact lists that the failed-construction
-        # rollback above builds, so a publisher can never be created without
-        # also being destroyed. Enumerating the attributes by hand is what left
-        # the descriptor tactile publishers leaking on deactivate.
-        self._lifecycle_publishers = tuple(lifecycle_publishers)
-        self._plain_publishers = tuple(plain_publishers)
-        self._published: dict[str, object] = {}
-        self._published_capabilities: DeviceCapabilities | None = None
-        self._set_conversion_capabilities(capabilities)
+        return self
 
     def publish_capabilities(self, capabilities: DeviceCapabilities) -> None:
         """Publish declared or verified capability metadata."""
@@ -426,12 +429,12 @@ class SnapshotPublisher:
         """Destroy every publisher owned by this interface."""
 
         with self._lock:
-            for publisher in reversed(self._lifecycle_publishers):
-                self._node.destroy_lifecycle_publisher(publisher)
-            for publisher in reversed(self._plain_publishers):
-                self._node.destroy_publisher(publisher)
-            self._lifecycle_publishers = ()
-            self._plain_publishers = ()
+            while self._lifecycle_publishers:
+                self._node.destroy_lifecycle_publisher(self._lifecycle_publishers[-1])
+                self._lifecycle_publishers.pop()
+            while self._plain_publishers:
+                self._node.destroy_publisher(self._plain_publishers[-1])
+                self._plain_publishers.pop()
             self._telemetry_publishers.clear()
             self._force_field_publishers.clear()
             self._published.clear()

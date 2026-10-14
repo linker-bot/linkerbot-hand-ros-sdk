@@ -198,7 +198,7 @@ def test_gain_client_service_query_and_state_over_dds(sdk_rig, name):
             lambda: (
                 client.is_ready(name)
                 and setter.service_is_ready()
-                and subscription.get_publisher_count()
+                and rig.consumer.count_publishers(subscription.topic_name)
             )
         )
         publication = getattr(client, f"set_{name}")([1, 2, 3, 4, 5, 6])

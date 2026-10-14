@@ -12,6 +12,15 @@ from rclpy.lifecycle import TransitionCallbackReturn
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 
+PRE_SET_SUPPORTED = pytest.mark.skipif(
+    not hasattr(Node, "add_pre_set_parameters_callback"),
+    reason="This rclpy distribution does not expose pre-set callbacks",
+)
+POST_SET_SUPPORTED = pytest.mark.skipif(
+    not hasattr(Node, "add_post_set_parameters_callback"),
+    reason="This rclpy distribution does not expose post-set callbacks",
+)
+
 
 @pytest.fixture
 def rig():
@@ -57,8 +66,11 @@ def test_later_validator_rejection_never_changes_runtime(rig, active):
 
 
 @pytest.mark.parametrize("active", [False, True])
-def test_commit_precedes_runtime_application_and_preserves_pre_set_changes(
-    rig, active, monkeypatch
+@pytest.mark.parametrize(
+    "pre_set", [False, pytest.param(True, marks=PRE_SET_SUPPORTED)]
+)
+def test_commit_precedes_runtime_application_and_keeps_effective_parameters(
+    rig, active, pre_set, monkeypatch
 ):
     node, builder = rig
     if active:
@@ -71,10 +83,14 @@ def test_commit_precedes_runtime_application_and_preserves_pre_set_changes(
         original(configuration)
 
     monkeypatch.setattr(node._interfaces, "apply_rates", apply)
-    node.add_pre_set_parameters_callback(
-        lambda parameters: [*parameters, Parameter("publish_rate_hz", value=25.0)]
-    )
-    result = node.set_parameters_atomically([Parameter("angles_hz", value=50.0)])
+    parameters = [Parameter("angles_hz", value=50.0)]
+    if pre_set:
+        node.add_pre_set_parameters_callback(
+            lambda parameters: [*parameters, Parameter("publish_rate_hz", value=25.0)]
+        )
+    else:
+        parameters.append(Parameter("publish_rate_hz", value=25.0))
+    result = node.set_parameters_atomically(parameters)
     assert result.successful
     assert observations == [50.0]
     assert node._configuration.polling_plan.angles_hz == 50.0
@@ -94,9 +110,12 @@ def test_apply_failure_restores_atomic_parameters_and_runtime(
     node, builder = rig
     node.trigger_activate()
     previous = node._configuration
-    node.add_pre_set_parameters_callback(
-        lambda parameters: [Parameter(p.name, p.type_, p.value) for p in parameters]
-    )
+    if hasattr(node, "add_pre_set_parameters_callback"):
+        # Keep the Jazzy regression case: compensation must compare parameter
+        # values even when a pre-set callback creates fresh Parameter objects.
+        node.add_pre_set_parameters_callback(
+            lambda parameters: [Parameter(p.name, p.type_, p.value) for p in parameters]
+        )
     original = (
         node._interfaces.apply_rates
         if failure == "rates"
@@ -155,7 +174,7 @@ def test_parameter_compensation_veto_stops_control_until_cleanup(rig, monkeypatc
     assert node._configuration.polling_plan.angles_hz == 50.0
     assert not node._active
     assert not builder.latest_runtime._polling
-    assert not node._interfaces.commands._subscriptions
+    assert node._interfaces is None
     assert node.trigger_activate() == TransitionCallbackReturn.FAILURE
     assert not node.set_parameters_atomically(
         [Parameter("angles_hz", value=60.0)]
@@ -188,6 +207,7 @@ def test_individual_updates_keep_successful_predecessors(rig, monkeypatch):
     assert node._configuration.publish_rate_hz == 100.0
 
 
+@POST_SET_SUPPORTED
 def test_post_set_failure_restores_parameters_without_touching_runtime(rig):
     node, builder = rig
     node.trigger_activate()
@@ -206,6 +226,7 @@ def test_post_set_failure_restores_parameters_without_touching_runtime(rig):
     assert builder.latest_runtime.polling_plans == polls
 
 
+@PRE_SET_SUPPORTED
 def test_pre_set_changes_are_checked_during_compensation(rig, monkeypatch):
     node, _builder = rig
     node.trigger_activate()
@@ -227,16 +248,25 @@ def test_pre_set_changes_are_checked_during_compensation(rig, monkeypatch):
     assert node._configuration.polling_plan.angles_hz == 50.0
 
 
-def test_nested_parameter_update_is_rejected_without_corrupting_outer_update(rig):
+@pytest.mark.parametrize(
+    "stage", ["on", pytest.param("post", marks=POST_SET_SUPPORTED)]
+)
+def test_nested_parameter_update_is_rejected_without_corrupting_outer_update(
+    rig, stage
+):
     node, _builder = rig
     nested = []
 
-    def post_set(_parameters):
+    def callback(_parameters):
         nested.append(
             node.set_parameters_atomically([Parameter("angles_hz", value=75.0)])
         )
+        return SetParametersResult(successful=True)
 
-    node.add_post_set_parameters_callback(post_set)
+    if stage == "on":
+        node.add_on_set_parameters_callback(callback)
+    else:
+        node.add_post_set_parameters_callback(callback)
     result = node.set_parameters_atomically([Parameter("angles_hz", value=50.0)])
     assert result.successful
     assert len(nested) == 1 and not nested[0].successful

@@ -1,6 +1,11 @@
 """QoS contracts shared by the Linkerbot hand driver and clients."""
 
-from rclpy.event_handler import PublisherEventCallbacks, SubscriptionEventCallbacks
+try:
+    from rclpy.event_handler import PublisherEventCallbacks, SubscriptionEventCallbacks
+except ModuleNotFoundError as error:  # Humble uses the original QoS event module.
+    if error.name != "rclpy.event_handler":
+        raise
+    from rclpy.qos_event import PublisherEventCallbacks, SubscriptionEventCallbacks
 from rclpy.qos import (
     DurabilityPolicy,
     HistoryPolicy,

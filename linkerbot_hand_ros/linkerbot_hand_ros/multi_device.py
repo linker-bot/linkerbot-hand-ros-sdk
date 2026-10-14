@@ -8,7 +8,7 @@ from typing import Any, Protocol
 
 import rclpy
 from rcl_interfaces.msg import ParameterDescriptor
-from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
+from rclpy.executors import ExternalShutdownException
 from rclpy.lifecycle import TransitionCallbackReturn
 from rclpy.node import Node
 from rclpy.parameter import Parameter
@@ -24,6 +24,7 @@ from .discovery_deployment import (
     select_hands,
 )
 from .discovery_diagnostics import exception_details
+from .executor import MultiThreadedExecutor
 from .node import (
     CALLBACK_GROUPS_PER_HAND,
     LinkerbotHandNode,
@@ -350,38 +351,32 @@ def main(args: list[str] | None = None) -> None:
         raise SystemExit(1) from error
     finally:
         logger = None if container is None else container.get_logger()
+        if executor is not None:
+            for owned_node in executor.get_nodes():
+                executor.remove_node(owned_node)
+            if not executor.shutdown(timeout_sec=EXECUTOR_SHUTDOWN_TIMEOUT_S):
+                raise RuntimeError(
+                    "executor cleanup incomplete; ROS resources retained"
+                )
+            executor = None
         if lifecycle is not None and rclpy.ok():
             try:
                 for error in lifecycle.stop():
                     _log_cleanup_error(logger, error)
             except BaseException as error:  # noqa: BLE001 - final resource boundary
                 _log_cleanup_error(logger, f"lifecycle group stop failed: {error}")
-        if executor is not None:
-            try:
-                for node in nodes:
-                    executor.remove_node(node)
-                if container is not None:
-                    executor.remove_node(container)
-            except BaseException as error:  # noqa: BLE001 - final resource boundary
-                _log_cleanup_error(logger, f"executor node removal failed: {error}")
-            try:
-                if not executor.shutdown(timeout_sec=EXECUTOR_SHUTDOWN_TIMEOUT_S):
-                    _log_cleanup_error(
-                        logger,
-                        "executor shutdown exceeded "
-                        f"{EXECUTOR_SHUTDOWN_TIMEOUT_S:g} seconds",
-                    )
-            except BaseException as error:  # noqa: BLE001 - final resource boundary
-                _log_cleanup_error(logger, f"executor shutdown failed: {error}")
-        for error in destroy_hand_nodes(nodes):
+        cleanup_errors = destroy_hand_nodes(nodes)
+        for error in cleanup_errors:
             _log_cleanup_error(logger, error)
+        if cleanup_errors:
+            raise RuntimeError("driver cleanup incomplete; ROS context retained")
         try:
             if container is not None:
                 container.destroy_node()
-        except BaseException as error:  # noqa: BLE001 - final resource boundary
+        except BaseException as error:
             _log_cleanup_error(logger, f"container destruction failed: {error}")
-        finally:
-            rclpy.try_shutdown()
+            raise
+        rclpy.try_shutdown()
 
 
 def _log_cleanup_error(logger: ErrorLogger | None, message: str) -> None:

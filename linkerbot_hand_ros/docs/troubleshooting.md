@@ -12,16 +12,33 @@ Keep the scan summary, original cause, configuration path and lifecycle error fr
 
 Load ROS, the venv and the workspace in order in each terminal:
 
+First select `export LINKERBOT_ROS_DISTRO=humble` or `export LINKERBOT_ROS_DISTRO=jazzy`.
+
 ```bash
-source /opt/ros/jazzy/setup.bash
-source ~/venvs/linkerbot-hand-ros/bin/activate
-source ~/linkerbot_ws/install/setup.bash
+source "/opt/ros/${LINKERBOT_ROS_DISTRO}/setup.bash"
+source "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}/bin/activate"
+source "$HOME/linkerbot_${ROS_DISTRO}_ws/install/setup.bash"
 ros2 pkg executables linkerbot_hand_ros
 python -c 'import sys, linkerbot_hand; print(sys.executable); print(linkerbot_hand.__file__)'
 ```
 
 Do not mix ROS distributions or Python environments. Follow [installation](getting_started.md)
 for missing packages and [updates](update.md) for incorrect SDK paths or inconsistent ROSIDL consumers.
+
+## DDS crashes or intermittent offline test timeouts
+
+Run offline tests in a separate terminal and an unused discovery domain; see
+[local checks](../../scripts/README.md). Driver pytest defaults to `ROS_DOMAIN_ID=87`
+and `ROS_LOCALHOST_ONLY=1`, preserves explicit settings, and checks for other ROS
+nodes before testing. Parallel workers need separate domains. This isolates test
+discovery; it does not establish the cause of a native DDS crash.
+
+For `sequence size exceeds remaining buffer`, unexpected graph endpoints or a
+native crash, retain the ROS/RMW/Fast DDS versions, domain, graph and native stack.
+A Python traceback alone does not identify the crashing DDS thread. Production
+nodes that communicate must share their intended domain; plan domain changes for
+all peers together. Passing isolated fake-device tests does not verify production
+networking or hardware behavior.
 
 ## Configure or activate fails
 
@@ -40,6 +57,13 @@ Investigate `identity_mismatch` using the actual connected identity. For `unsupp
 read the operation and error details; the code alone does not prove that no device profile exists.
 Resolve cleanup failures before retrying. Deactivate and cleanup before changing static
 parameters; see [configuration](configuration.md).
+
+If cleanup reports unfinished workers or callbacks, the driver retains their ROS
+entities and SDK owner. Resolve the reported timeout and retry cleanup or node
+destruction; configure must finish releasing the previous attempt before creating
+a replacement. Activation and parameter updates are refused while cleanup is
+incomplete. Process shutdown drains submitted callbacks before destroying entities;
+a timeout is reported as incomplete cleanup and does not force resource release.
 
 ## Active but no feedback, or low feedback rate
 

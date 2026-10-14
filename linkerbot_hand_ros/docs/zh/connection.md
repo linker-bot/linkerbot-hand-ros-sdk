@@ -3,7 +3,7 @@
 [English](../connection.md) · [使用手册](../../README_zh.md)
 
 先完成[安装](getting_started.md)。一条物理 CAN/CAN FD 通道连接一只手，多手分别使用独立通道。
-本仓库安装流程面向 Ubuntu/Jazzy；Windows 适配器配置沿用 SDK 能力，Windows ROS 与硬件运行需单独验证。
+本仓库安装流程面向 Ubuntu 22.04/Humble 或 Ubuntu 24.04/Jazzy；Windows 适配器配置沿用 SDK 能力，Windows ROS 与硬件运行需单独验证。
 
 ## Linux SocketCAN
 

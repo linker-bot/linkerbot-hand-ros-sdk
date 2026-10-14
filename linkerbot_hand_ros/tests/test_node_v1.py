@@ -606,6 +606,8 @@ def test_diagnostics_reads_health_without_snapshot_or_capability_access(node_rig
     node, builder = node_rig
     node.trigger_configure()
     node.trigger_activate()
+    # Isolate this callback's reads from the concurrent cache publisher.
+    node._interfaces._state_worker.stop(1.0)
     runtime = builder.latest_runtime
     publisher = FakePublisher()
     original = node._interfaces.diagnostic_publisher
@@ -632,6 +634,8 @@ def test_runtime_firmware_degradation_republishes_capability_without_state_io(
     node, builder = node_rig
     node.trigger_configure()
     node.trigger_activate()
+    # Isolate these callback reads from the concurrent cache publisher.
+    node._interfaces._state_worker.stop(1.0)
     runtime = builder.latest_runtime
     publisher = FakePublisher()
     snapshot = node._interfaces.snapshot

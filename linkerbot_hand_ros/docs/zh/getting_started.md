@@ -2,27 +2,33 @@
 
 [English](../getting_started.md) · [使用手册](../../README_zh.md)
 
-## 1. 准备 ROS 和 Python
+## 1. 选择 ROS 发行版并准备环境
 
-以下命令适用于 Ubuntu 24.04 / ROS 2 Jazzy。先按
-[ROS 安装指南](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)配置 apt 软件源。
-使用 Ubuntu 系统 Python，并通过 `--system-site-packages` 让虚拟环境能读取 ROS 系统包。
+按操作系统选择一项；同一份最新 `main` 源码支持这两种发行版：
+
+- Ubuntu 22.04 / Python 3.10：使用 **ROS 2 Humble**，按 [Humble 安装指南](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)配置 apt 软件源，然后执行 `export LINKERBOT_ROS_DISTRO=humble`。
+- Ubuntu 24.04 / Python 3.12：使用 **ROS 2 Jazzy**，按 [Jazzy 安装指南](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)配置 apt 软件源，然后执行 `export LINKERBOT_ROS_DISTRO=jazzy`。
+
+新部署使用与系统匹配的发行版；不要跨 Ubuntu 版本安装 ROS 二进制包。
+使用系统 Python，虚拟环境通过 `--system-site-packages` 读取同一发行版的 ROS 包。
+以下命令复用上方选择；每个发行版使用独立 venv 和工作空间。
 
 ```bash
 sudo apt update
 sudo apt install -y git can-utils python3-venv python3-rosdep \
-  python3-colcon-common-extensions python3-setuptools python3-wheel ros-jazzy-ros-base
+  python3-colcon-common-extensions python3-setuptools python3-wheel \
+  "ros-${LINKERBOT_ROS_DISTRO}-ros-base"
 if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
   sudo rosdep init
 fi
-rosdep update
-source /opt/ros/jazzy/setup.bash
-/usr/bin/python3 -m venv --system-site-packages ~/venvs/linkerbot-hand-ros
-source ~/venvs/linkerbot-hand-ros/bin/activate
+rosdep update --rosdistro "${LINKERBOT_ROS_DISTRO}"
+source "/opt/ros/${LINKERBOT_ROS_DISTRO}/setup.bash"
+/usr/bin/python3 -m venv --system-site-packages "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}"
+source "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}/bin/activate"
 python -m pip install --upgrade pip
 ```
 
-colcon 使用 Ubuntu 提供的 setuptools/wheel；venv 通过 `--system-site-packages` 复用它们。
+colcon 复用 Ubuntu 提供的 setuptools/wheel，不要用 pip 升级这个构建环境中的 setuptools。
 
 ## 2. 安装最新 main 源码
 
@@ -38,8 +44,8 @@ git clone --branch main --depth 1 \
   https://gitea.linkerhub.work/linker-bot/linkerbot-hand-python.git linkerbot-hand
 python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
 
-mkdir -p ~/linkerbot_ws/src
-cd ~/linkerbot_ws/src
+mkdir -p "$HOME/linkerbot_${ROS_DISTRO}_ws/src"
+cd "$HOME/linkerbot_${ROS_DISTRO}_ws/src"
 git clone --branch main --depth 1 \
   https://gitea.linkerhub.work/linker-bot/linkerbot-hand-ros2.git linkerbot-hand-ros
 ```
@@ -53,12 +59,12 @@ git clone --branch main --depth 1 \
 URDF 和 mesh 不由 rosdep 安装，按下方 GUI 资源步骤单独准备。
 
 ```bash
-cd ~/linkerbot_ws
-rosdep install --from-paths src --ignore-src -y --rosdistro jazzy
-rosdep check --from-paths src --ignore-src --rosdistro jazzy
+cd "$HOME/linkerbot_${ROS_DISTRO}_ws"
+rosdep install --from-paths src --ignore-src -y --rosdistro "${ROS_DISTRO}"
+rosdep check --from-paths src --ignore-src --rosdistro "${ROS_DISTRO}"
 python -m colcon build --symlink-install \
   --cmake-args -DPython3_EXECUTABLE="$(command -v python)"
-source ~/linkerbot_ws/install/setup.bash
+source "$HOME/linkerbot_${ROS_DISTRO}_ws/install/setup.bash"
 python -c 'import linkerbot_transport, linkerbot_hand; print("Python dependencies: OK")'
 ros2 pkg prefix linkerbot_hand_msgs
 ros2 pkg prefix linkerbot_hand_ros
@@ -74,10 +80,13 @@ rosdep 的实际错误必须处理，单独的 `pkg_resources` 弃用警告不�
 
 ## 4. 每个终端加载环境
 
+每个新终端先执行所选发行版的 `export LINKERBOT_ROS_DISTRO=humble` 或
+`export LINKERBOT_ROS_DISTRO=jazzy`，再加载以下环境。一个终端只加载一个 ROS 发行版。
+
 ```bash
-source /opt/ros/jazzy/setup.bash
-source ~/venvs/linkerbot-hand-ros/bin/activate
-source ~/linkerbot_ws/install/setup.bash
+source "/opt/ros/${LINKERBOT_ROS_DISTRO}/setup.bash"
+source "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}/bin/activate"
+source "$HOME/linkerbot_${ROS_DISTRO}_ws/install/setup.bash"
 ```
 
 ### 可选：准备 O6 GUI 资源

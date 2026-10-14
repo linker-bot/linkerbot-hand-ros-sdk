@@ -9,7 +9,9 @@
 - deactivate：停止命令和 polling，保留连接，不自动发送运动或保持目标。
 - cleanup/shutdown/error：有界停止 worker 并关闭连接；失败会报告并保留待清理资源以便重试。
 
-launch 默认 `autostart:=true`。外部管理时先启动：
+launch 默认 `autostart:=true`。手工单手启动（`discover:=false`）仅在启动时自动
+configure/activate；首次启动失败或 cleanup 后，再次 configure 会保持 inactive，
+需要显式 activate。外部管理时先启动：
 
 ```bash
 ros2 launch linkerbot_hand_ros hand.launch.py autostart:=false

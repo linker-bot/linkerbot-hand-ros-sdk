@@ -34,7 +34,7 @@ ros2 launch linkerbot_hand_ros hand.launch.py discover:=true channels:=can0
 trigger fallback. Discovery cannot mix explicit `model`, `side`, `transport_json`;
 single-hand runtime arguments (e.g. `angles_hz:=50`) and `namespace` still apply.
 Single-hand discovery follows ROS namespace rules: relative paths are under the
-enclosing `PushROSNamespace`, while absolute paths stay fixed.
+enclosing `PushRosNamespace`, while absolute paths stay fixed.
 
 Multi-hand discovery needs at least one verified candidate. It shows interface,
 model, physical side, backend, then assigned namespace. Illustrative output:
@@ -76,7 +76,7 @@ These deployments must be loaded through launch, not ROS `--params-file`.
 
 SDK aliases provide initial namespaces such as `/l6l`. Edit the saved namespace
 for a business role. Multi-hand discovery puts aliases under the container
-namespace: `PushROSNamespace("/robot")` produces `/robot/l6l` and `/robot/o6r`.
+namespace: `PushRosNamespace("/robot")` produces `/robot/l6l` and `/robot/o6r`.
 These absolute paths are saved once; loading under another parent keeps them.
 Edit or regenerate the deployment to relocate roles. Internal node names and
 namespaces are protected from process-wide `__node`/`__ns` remaps while global
@@ -133,7 +133,7 @@ MiniCANFD on Linux; PCAN (classic CAN/CAN FD), MiniCANFD and SLCAN (CAN FD) on
 Windows. Explicit backends only filter these sources. Libraries, permissions, configured interfaces
 and adapter firmware must be available. The scan budget is soft; vendor calls
 and required cleanup can take longer. No runtime rescan, hotplug substitution
-or interactive prompt is provided. The documented ROS installation targets Ubuntu/Jazzy; Windows adapter support in the SDK
+or interactive prompt is provided. The documented ROS installation targets Ubuntu 22.04/Humble or Ubuntu 24.04/Jazzy; Windows adapter support in the SDK
 does not establish a validated Windows ROS deployment.
 
 Without explicit MiniCANFD channel filters, Linux probes channel 0 then conditionally channel 1;

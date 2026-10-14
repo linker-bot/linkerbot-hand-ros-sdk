@@ -1,7 +1,7 @@
 name: Release
 
 # Optional source tags must match the package versions at that commit.
-# Full quality checks run locally with ROS Jazzy before an authorized release.
+# Full quality checks run locally with ROS Humble and Jazzy before an authorized release.
 on:
   push:
     tags: ["v*"]

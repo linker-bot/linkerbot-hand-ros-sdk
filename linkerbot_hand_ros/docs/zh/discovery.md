@@ -31,7 +31,7 @@ ros2 launch linkerbot_hand_ros hand.launch.py discover:=true channels:=can0
 `slcan:COM5`、`minicanfd:0:0`。指定接口缺失不会回退到其他接口。
 自动模式不能同时指定手工 `model`、`side`、`transport_json`；
 单手运行参数（如 `angles_hz:=50`）和 `namespace` 仍可使用。
-单手遵循 ROS namespace 规则：相对路径接在外层 `PushROSNamespace` 下，绝对路径保持固定。
+单手遵循 ROS namespace 规则：相对路径接在外层 `PushRosNamespace` 下，绝对路径保持固定。
 
 多手至少需要一只已验证设备。摘要显示接口、型号、物理侧别、后端，再给出 namespace。
 以下仅为格式示例：
@@ -69,7 +69,7 @@ ros2 launch linkerbot_hand_ros multi_hand.launch.py config:=./hands-lab.yaml
 直接作为 ROS `--params-file`。
 
 SDK 别名用于初始 namespace（如 `/l6l`），可在保存文件中编辑为业务角色。
-多手发现将别名放到容器的 namespace 下：外层 `PushROSNamespace("/robot")`
+多手发现将别名放到容器的 namespace 下：外层 `PushRosNamespace("/robot")`
 对应 `/robot/l6l`、`/robot/o6r`，完整绝对路径只保存一次。
 已有文件在另一个父级 namespace 下加载时仍保持保存路径；迁移角色需编辑或重新生成。
 内部手节点防止容器进程的 `__node`/`__ns` 覆盖身份，同时保留全局参数
@@ -118,7 +118,7 @@ PCAN/SLCAN 支持原生 `channels`、`bitrate`、`data_bitrate`、
 后端省略时沿用 SDK 平台默认：Linux 为 SocketCAN（经典 CAN/CAN FD）与 MiniCANFD；Windows 为
 PCAN（经典 CAN/CAN FD）、MiniCANFD、SLCAN（CAN FD）。库、权限、已配置接口和适配器固件必须可用。
 扫描预算不是硬截止，厂商调用和必要清理可能更久；不提供运行中重扫、
-热插拔替换或交互输入。本文 ROS 安装面向 Ubuntu/Jazzy，SDK 支持 Windows 适配器不代表 Windows ROS 已验证。
+热插拔替换或交互输入。本文 ROS 安装面向 Ubuntu 22.04/Humble 或 Ubuntu 24.04/Jazzy，SDK 支持 Windows 适配器不代表 Windows ROS 已验证。
 
 未显式设置 MiniCANFD 通道筛选时，Linux 自动探测 0，再按条件回退 1；
 详见[自动选择规则](connection.md#minicanfd)。固定模板会覆盖该自动范围。

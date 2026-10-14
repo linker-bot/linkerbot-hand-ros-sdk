@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from collections import OrderedDict
@@ -18,6 +19,7 @@ from linkerbot_hand import (
     CommandSemantic,
     DeviceCapabilities,
     HandDevice,
+    LifecycleError,
 )
 from rclpy.lifecycle import LifecycleNode
 
@@ -78,6 +80,7 @@ class CommandInterface:
         on_accepted: Callable[[], None],
         on_error: Callable[[BaseException], None],
         tracking_capacity: int = 512,
+        shutdown_timeout_s: float = 2.0,
     ) -> None:
         if (
             type(tracking_capacity) is not int
@@ -86,12 +89,20 @@ class CommandInterface:
             raise ValueError(
                 f"tracking_capacity must be within 1..{_STATUS_BATCH_CAPACITY}"
             )
+        if (
+            isinstance(shutdown_timeout_s, bool)
+            or not isinstance(shutdown_timeout_s, (int, float))
+            or not math.isfinite(shutdown_timeout_s)
+            or shutdown_timeout_s <= 0
+        ):
+            raise ValueError("shutdown_timeout_s must be finite and positive")
         self._node = node
         self._device = device
         self._is_active = is_active
         self._on_accepted = on_accepted
         self._on_error = on_error
         self._tracking_capacity = tracking_capacity
+        self._shutdown_timeout_s = shutdown_timeout_s
         # Commands share the lifecycle control group so admission and deactivation
         # cannot pass each other while observation callbacks run independently.
         self._callback_group = node.default_callback_group
@@ -112,7 +123,7 @@ class CommandInterface:
 
         if self._subscriptions:
             return
-        subscriptions: list[Any] = []
+        subscriptions = self._subscriptions
         try:
             if capabilities.command(CommandSemantic.ANGLES) is not None:
                 subscriptions.append(
@@ -141,24 +152,26 @@ class CommandInterface:
                     )
                 )
         except Exception:
-            for subscription in subscriptions:
-                self._node.destroy_subscription(subscription)
+            self.deactivate()
             raise
-        self._subscriptions = subscriptions
         with self._lock:
             self._enabled = True
 
     def deactivate(self) -> None:
-        """Remove command subscriptions so inactive nodes cannot accept targets."""
+        """Stop admission and boundedly drain publication before reuse."""
 
         with self._lock:
             self._enabled = False
             self._tracked.clear()
-        for subscription in self._subscriptions:
-            self._node.destroy_subscription(subscription)
-        self._subscriptions.clear()
-        with self._publication_lock:
-            pass
+        while self._subscriptions:
+            self._node.destroy_subscription(self._subscriptions[-1])
+            self._subscriptions.pop()
+        if not self._publication_lock.acquire(timeout=self._shutdown_timeout_s):
+            raise LifecycleError(
+                "command status publication did not finish before shutdown deadline",
+                operation="deactivate_commands",
+            )
+        self._publication_lock.release()
 
     def track(
         self,

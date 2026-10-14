@@ -7,10 +7,16 @@ from dataclasses import replace
 from pathlib import Path
 
 import yaml
+from launch.actions import EmitEvent, OpaqueFunction, RegisterEventHandler
+from launch.event_handlers import OnProcessStart
+from launch.events import matches_action
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import LifecycleNode, Node
+from launch_ros.event_handlers import OnStateTransition
+from launch_ros.events.lifecycle import ChangeState
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.utilities import make_namespace_absolute, prefix_namespace
+from lifecycle_msgs.msg import Transition
 from linkerbot_hand import ValidationError
 
 from .discovery_config import (
@@ -45,6 +51,21 @@ def _discovery_exit(event, context):
     if event.returncode != 0 and not context.is_shutdown:
         raise RuntimeError(f"hand startup failed (exit code {event.returncode})")
     return []
+
+
+def _activate_after_initial_configuration(context, *, driver):
+    # Consume the first configuration result even on failure. A later manual
+    # configure must not unexpectedly open the device and start polling.
+    if context.locals.event.goal_state != "inactive":
+        return []
+    return [
+        EmitEvent(
+            event=ChangeState(
+                lifecycle_node_matcher=matches_action(driver),
+                transition_id=Transition.TRANSITION_ACTIVATE,
+            )
+        )
+    ]
 
 
 def check_hand_mode(context):
@@ -90,16 +111,48 @@ def build_hand_launch(context, *, arguments):
         for name, _default, value_type in arguments
     }
     if not _boolean(_value(context, "discover"), "discover"):
+        driver = LifecycleNode(
+            package="linkerbot_hand_ros",
+            executable="hand_node",
+            name="linkerbot_hand",
+            namespace=LaunchConfiguration("namespace"),
+            output="screen",
+            parameters=[parameters],
+        )
+        if not _boolean(_value(context, "autostart"), "autostart"):
+            return [driver]
+        # Use the same public lifecycle events on Humble and Jazzy. Register
+        # before process startup, and activate only if initial configuration succeeds.
+        # One-shot handlers never reactivate a deliberately deactivated driver.
         return [
-            LifecycleNode(
-                package="linkerbot_hand_ros",
-                executable="hand_node",
-                name="linkerbot_hand",
-                namespace=LaunchConfiguration("namespace"),
-                output="screen",
-                autostart=LaunchConfiguration("autostart"),
-                parameters=[parameters],
-            )
+            RegisterEventHandler(
+                OnProcessStart(
+                    target_action=driver,
+                    on_start=[
+                        EmitEvent(
+                            event=ChangeState(
+                                lifecycle_node_matcher=matches_action(driver),
+                                transition_id=Transition.TRANSITION_CONFIGURE,
+                            )
+                        )
+                    ],
+                    handle_once=True,
+                )
+            ),
+            RegisterEventHandler(
+                OnStateTransition(
+                    target_lifecycle_node=driver,
+                    start_state="configuring",
+                    entities=[
+                        OpaqueFunction(
+                            function=_activate_after_initial_configuration,
+                            kwargs={"driver": driver},
+                        )
+                    ],
+                    handle_once=True,
+                )
+            ),
+            driver,
         ]
     runtime = {
         name: value.evaluate(context)

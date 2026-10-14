@@ -131,7 +131,7 @@ def test_structured_fault_topic_preserves_raw_topic_and_change_detection(
     caps = hand.get_capabilities()
     sample = fault_sample(caps, status_type, 0xFF)
     snapshot = replace(hand.get_snapshot(), faults=sample)
-    publisher = SnapshotPublisher(_RecordingNode(), caps)
+    publisher = SnapshotPublisher(_RecordingNode(), caps).create()
     publisher.publish_snapshot(
         hand.get_snapshot(),
         ros_now_ns=10**9,

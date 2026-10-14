@@ -1,5 +1,6 @@
 from copy import deepcopy
 from dataclasses import replace
+from threading import Thread
 
 import pytest
 import rclpy
@@ -12,6 +13,9 @@ from linkerbot_hand_ros.benchmark import (
     evaluate_measurements,
 )
 from linkerbot_hand_ros.examples.frequency_benchmark import FrequencyBenchmarkNode
+from rcl_interfaces.msg import SetParametersResult
+from rclpy.executors import SingleThreadedExecutor
+from rclpy.node import Node
 
 from linkerbot_hand_msgs.msg import (
     HandCommandStatus,
@@ -20,6 +24,61 @@ from linkerbot_hand_msgs.msg import (
 )
 
 _CLIENT_ID = 17
+
+
+@pytest.mark.parametrize("accepted", [True, False])
+def test_benchmark_configures_rates_atomically_through_namespaced_service(accepted):
+    rclpy.init()
+    driver = Node("driver", namespace="/benchmark_compat")
+    benchmark = FrequencyBenchmarkNode("/benchmark_compat/driver")
+    expected = {
+        "angles_hz": 50.0,
+        "angle_feedback": "query_only",
+        "force_hz": 10.0,
+        **{
+            f"force_{name}_hz": 0.0
+            for name in ("fn", "fns", "ft", "fts", "fd", "fds", "px")
+        },
+        "publish_rate_hz": 50.0,
+        "diagnostic_rate_hz": 1.0,
+    }
+    initial = {
+        name: "adaptive" if isinstance(value, str) else value + 5.0
+        for name, value in expected.items()
+    }
+    driver.declare_parameters("", list(initial.items()))
+    requests = []
+
+    def validate(parameters):
+        requests.append({parameter.name: parameter.value for parameter in parameters})
+        return SetParametersResult(successful=accepted, reason="frequency veto")
+
+    driver.add_on_set_parameters_callback(validate)
+    executor = SingleThreadedExecutor()
+    executor.add_node(driver)
+    worker = Thread(target=executor.spin)
+    worker.start()
+    try:
+        if accepted:
+            benchmark.configure_rates(50.0, 10.0, "query_only", 1.0, 3.0)
+            assert {
+                name: driver.get_parameter(name).value for name in expected
+            } == expected
+        else:
+            with pytest.raises(RuntimeError, match="frequency veto"):
+                benchmark.configure_rates(50.0, 10.0, "query_only", 1.0, 3.0)
+            assert {
+                name: driver.get_parameter(name).value for name in initial
+            } == initial
+        assert requests == [expected]
+    finally:
+        executor.shutdown()
+        worker.join(timeout=3.0)
+        benchmark.destroy_benchmark()
+        benchmark.destroy_node()
+        driver.destroy_node()
+        rclpy.try_shutdown()
+    assert not worker.is_alive()
 
 
 def test_benchmark_defers_high_rate_observation_until_capability_discovery():

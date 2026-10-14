@@ -107,12 +107,14 @@ class ManagementInterface:
         )
         self._callback_group = MutuallyExclusiveCallbackGroup()
         self._services: list[Any] = []
+
+    def create(self) -> None:
+        """Allocate services after the driver has retained this cleanup owner."""
+
         try:
             self._create_services()
         except Exception:
-            for service in self._services:
-                self._node.destroy_service(service)
-            self._services.clear()
+            self.destroy()
             raise
 
     def activate(self) -> None:
@@ -128,16 +130,10 @@ class ManagementInterface:
     def destroy(self) -> None:
         """Stop work and destroy every service entity."""
 
-        stop_error: Exception | None = None
-        try:
-            self.deactivate()
-        except Exception as error:
-            stop_error = error
-        for service in self._services:
-            self._node.destroy_service(service)
-        self._services.clear()
-        if stop_error is not None:
-            raise stop_error
+        self.deactivate()
+        while self._services:
+            self._node.destroy_service(self._services[-1])
+            self._services.pop()
 
     @property
     def worker_active(self) -> bool:

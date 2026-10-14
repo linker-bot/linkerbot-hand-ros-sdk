@@ -5,11 +5,16 @@
 更新前停止业务目标，deactivate/cleanup 驱动并退出进程。
 保留本地修改；切换分支或快进失败时先处理分支状态，不用重置工作区绕过错误。
 
+先按[安装指南](getting_started.md#1-选择-ros-发行版并准备环境)选择与系统匹配的 ROS 发行版。
+下面按发行版区分 venv 和工作空间；已有同发行版安装使用其他路径时，替换为实际路径。
+跨发行版安装使用独立工作空间，不能复用另一发行版的 build/install 产物。
+
 在新终端加载构建环境：
+先设置 `export LINKERBOT_ROS_DISTRO=humble` 或 `export LINKERBOT_ROS_DISTRO=jazzy`。
 
 ```bash
-source /opt/ros/jazzy/setup.bash
-source ~/venvs/linkerbot-hand-ros/bin/activate
+source "/opt/ros/${LINKERBOT_ROS_DISTRO}/setup.bash"
+source "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}/bin/activate"
 ```
 
 将 Transport、Hand 和 ROS 的 `origin` 设为当前仓库地址，更新三个仓库的 `main`，重新安装源码依赖：
@@ -23,10 +28,10 @@ git -C ~/linkerbot_deps/linkerbot-hand remote set-url origin \
   https://gitea.linkerhub.work/linker-bot/linkerbot-hand-python.git
 git -C ~/linkerbot_deps/linkerbot-hand switch main
 git -C ~/linkerbot_deps/linkerbot-hand pull --ff-only origin main
-git -C ~/linkerbot_ws/src/linkerbot-hand-ros remote set-url origin \
+git -C "$HOME/linkerbot_${ROS_DISTRO}_ws/src/linkerbot-hand-ros" remote set-url origin \
   https://gitea.linkerhub.work/linker-bot/linkerbot-hand-ros2.git
-git -C ~/linkerbot_ws/src/linkerbot-hand-ros switch main
-git -C ~/linkerbot_ws/src/linkerbot-hand-ros pull --ff-only origin main
+git -C "$HOME/linkerbot_${ROS_DISTRO}_ws/src/linkerbot-hand-ros" switch main
+git -C "$HOME/linkerbot_${ROS_DISTRO}_ws/src/linkerbot-hand-ros" pull --ff-only origin main
 python -m pip install -e "$HOME/linkerbot_deps/linkerbot-transport[all]" \
   -e "$HOME/linkerbot_deps/linkerbot-hand"
 ```
@@ -34,12 +39,12 @@ python -m pip install -e "$HOME/linkerbot_deps/linkerbot-transport[all]" \
 重建工作空间及依赖消息定义的下游包：
 
 ```bash
-cd ~/linkerbot_ws
-rosdep install --from-paths src --ignore-src -y --rosdistro jazzy
-rosdep check --from-paths src --ignore-src --rosdistro jazzy
+cd "$HOME/linkerbot_${ROS_DISTRO}_ws"
+rosdep install --from-paths src --ignore-src -y --rosdistro "${ROS_DISTRO}"
+rosdep check --from-paths src --ignore-src --rosdistro "${ROS_DISTRO}"
 python -m colcon build --symlink-install \
   --cmake-args -DPython3_EXECUTABLE="$(command -v python)"
-source ~/linkerbot_ws/install/setup.bash
+source "$HOME/linkerbot_${ROS_DISTRO}_ws/install/setup.bash"
 python -c 'import linkerbot_transport, linkerbot_hand; print("Python dependencies: OK")'
 ros2 pkg prefix linkerbot_hand_msgs
 ros2 pkg prefix linkerbot_hand_ros
@@ -61,5 +66,5 @@ ROS 重建不会下载或更新该资源仓库。
 ```bash
 git -C ~/linkerbot_deps/linkerbot-transport rev-parse HEAD
 git -C ~/linkerbot_deps/linkerbot-hand rev-parse HEAD
-git -C ~/linkerbot_ws/src/linkerbot-hand-ros rev-parse HEAD
+git -C "$HOME/linkerbot_${ROS_DISTRO}_ws/src/linkerbot-hand-ros" rev-parse HEAD
 ```

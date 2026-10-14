@@ -4,7 +4,7 @@
 
 Complete [installation](getting_started.md) first. Use one hand per physical CAN/CAN FD
 channel; use a separate channel for each hand in a multi-hand deployment.
-The ROS installation guide targets Ubuntu/Jazzy. Windows adapter configuration follows
+The ROS installation guide targets Ubuntu 22.04/Humble or Ubuntu 24.04/Jazzy. Windows adapter configuration follows
 SDK capabilities, but Windows ROS and hardware operation require platform validation.
 
 ## SocketCAN on Linux

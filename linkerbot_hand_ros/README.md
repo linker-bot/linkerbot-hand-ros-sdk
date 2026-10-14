@@ -8,7 +8,7 @@ polling and command scheduling. Applications use ROS interfaces without opening 
 
 ## Quick start
 
-[Install and read the first angles](docs/getting_started.md): prepare Jazzy, install sources,
+[Install and read the first angles](docs/getting_started.md): choose Humble or Jazzy, install sources,
 build the packages and read device state.
 
 ## Connect a hand

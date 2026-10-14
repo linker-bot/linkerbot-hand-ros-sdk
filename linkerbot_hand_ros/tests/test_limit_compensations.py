@@ -297,7 +297,7 @@ def test_limit_state_uses_cached_sample_and_suppresses_duplicates(
     assert runtime.read_count == 0
 
 
-def test_limit_public_client_services_and_state_over_ros(rig):
+def test_limit_public_client_services_and_state_over_ros(rig, shutdown_ros_executor):
     driver, builder = rig
     node = Node("limit_compensation_consumer")
     executor = MultiThreadedExecutor(num_threads=4)
@@ -362,8 +362,6 @@ def test_limit_public_client_services_and_state_over_ros(rig):
         spin_until(rejected.done)
         assert rejected.result().error_code == ErrorCode.DEVICE_NOT_READY.value
     finally:
-        executor.remove_node(driver)
-        executor.remove_node(node)
-        executor.shutdown(timeout_sec=5.0)
+        shutdown_ros_executor(executor)
         client.destroy()
         node.destroy_node()

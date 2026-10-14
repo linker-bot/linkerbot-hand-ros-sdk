@@ -112,7 +112,10 @@ def test_l6_torque_write_echo_and_fresh_sdk_query_project_over_dds(sdk_rig):
     )
     try:
         rig.spin_until(
-            lambda: client.is_ready("torques") and subscription.get_publisher_count()
+            lambda: (
+                client.is_ready("torques")
+                and rig.consumer.count_publishers(subscription.topic_name)
+            )
         )
         # A valid ACK may carry the previous output, not the submitted target.
         rig.peer.echo_value = 17

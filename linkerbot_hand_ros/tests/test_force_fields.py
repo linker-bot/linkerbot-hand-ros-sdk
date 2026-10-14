@@ -107,7 +107,7 @@ def test_all_matrix_models_publish_fn_without_fabricating_a_resultant(model):
         SamplePayload(semantic=TelemetrySemantic.FORCE, tactile=matrices), meta(), caps
     )
     node = Node()
-    publisher = SnapshotPublisher(node, caps)
+    publisher = SnapshotPublisher(node, caps).create()
     publish(publisher, snapshot(caps, force))
     message = node.publishers["~/state/force_fn"].messages[-1]
     assert message.name == "fn" and message.query_channel == "force"
@@ -136,7 +136,7 @@ def test_lite_scalar_update_does_not_republish_or_restamp_matrix():
         caps,
     )
     node = Node()
-    publisher = SnapshotPublisher(node, caps)
+    publisher = SnapshotPublisher(node, caps).create()
     publish(publisher, snapshot(caps, fn))
     old = node.publishers["~/state/tactile"].messages[-1].meta
     aggregate = merge_force_samples(fn, fns)
@@ -150,7 +150,7 @@ def test_lite_scalar_update_does_not_republish_or_restamp_matrix():
     publish(publisher, snapshot(caps, aggregate))
     assert node.publishers["~/state/tactile"].messages[-1].meta == old
     # A scalar arriving before the first matrix must not fail legacy conversion.
-    publish(SnapshotPublisher(Node(), caps), snapshot(caps, fns))
+    publish(SnapshotPublisher(Node(), caps).create(), snapshot(caps, fns))
 
 
 def test_o30_single_native_sample_publishes_fn_and_fns_with_same_metadata():
@@ -162,7 +162,7 @@ def test_o30_single_native_sample_publishes_fn_and_fns_with_same_metadata():
         caps,
     )
     node = Node()
-    publisher = SnapshotPublisher(node, caps)
+    publisher = SnapshotPublisher(node, caps).create()
     publish(publisher, snapshot(caps, force))
     fn = node.publishers["~/state/force_fn"].messages[-1]
     fns = node.publishers["~/state/force_fns"].messages[-1]
@@ -240,7 +240,7 @@ def o30_tashan_sample(metadata, *, side="left", missing=()):
 def test_tashan_scalar_fields_share_metadata_and_preserve_native_values(side):
     caps, force = o30_tashan_sample(meta(7, age=0.05), side=side)
     node = Node()
-    publisher = SnapshotPublisher(node, caps)
+    publisher = SnapshotPublisher(node, caps).create()
     publish(publisher, snapshot(caps, force))
     messages = [
         node.publishers[f"~/state/force_{name}"].messages[-1]
@@ -316,7 +316,7 @@ def test_tashan_descriptor_capabilities_and_shared_polling_follow_actual_fields(
 def test_tashan_missing_sensor_stays_absent_in_field_and_descriptor_messages(missing):
     caps, force = o30_tashan_sample(meta(), missing=missing)
     node = Node()
-    publish(SnapshotPublisher(node, caps), snapshot(caps, force))
+    publish(SnapshotPublisher(node, caps).create(), snapshot(caps, force))
     native = node.publishers["~/state/tactile_sensors"].messages[-1]
     native = deserialize_message(serialize_message(native), HandTactileSensorState)
     for name in ("fn", "ft", "fd", "px"):
@@ -356,7 +356,7 @@ def test_tashan_after_matrix_sample_does_not_republish_old_fns_or_reshape_scalar
         caps,
     )
     node = Node()
-    publisher = SnapshotPublisher(node, caps)
+    publisher = SnapshotPublisher(node, caps).create()
     publish(publisher, snapshot(caps, matrix))
     assert len(node.publishers["~/state/force_fns"].messages) == 1
     assert len(node.publishers["~/state/normal_force_resultant"].messages) == 1

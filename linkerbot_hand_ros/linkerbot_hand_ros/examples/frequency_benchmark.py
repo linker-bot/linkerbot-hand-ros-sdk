@@ -12,9 +12,9 @@ from itertools import pairwise
 import rclpy
 from builtin_interfaces.msg import Time
 from diagnostic_msgs.msg import DiagnosticArray
+from rcl_interfaces.srv import SetParametersAtomically
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from rclpy.parameter_client import AsyncParameterClient
 from rclpy.task import Future
 from rclpy.utilities import remove_ros_args
 
@@ -143,7 +143,9 @@ class FrequencyBenchmarkNode(Node):
         super().__init__("linkerbot_hand_frequency_benchmark")
         self.driver_name = driver_name.rstrip("/")
         self.command_client = HandCommandClient(self, self.driver_name)
-        self.parameter_client = AsyncParameterClient(self, self.driver_name)
+        self.parameter_client = self.create_client(
+            SetParametersAtomically, f"{self.driver_name}/set_parameters_atomically"
+        )
         self.latest_percent_angles: tuple[float, ...] | None = None
         self.state_events: list[StateEvent] = []
         self.command_events: list[CommandEvent] = []
@@ -378,7 +380,7 @@ class FrequencyBenchmarkNode(Node):
     ) -> None:
         """Atomically align SDK polling and ROS cache publication rates."""
 
-        if not self.parameter_client.wait_for_services(timeout_sec=timeout_s):
+        if not self.parameter_client.wait_for_service(timeout_sec=timeout_s):
             raise RuntimeError(f"参数服务未就绪: {self.driver_name}")
         publish_hz = max(angle_hz, tactile_hz)
         parameters = [
@@ -392,7 +394,11 @@ class FrequencyBenchmarkNode(Node):
             Parameter("publish_rate_hz", value=publish_hz),
             Parameter("diagnostic_rate_hz", value=diagnostic_hz),
         ]
-        future = self.parameter_client.set_parameters_atomically(parameters)
+        future = self.parameter_client.call_async(
+            SetParametersAtomically.Request(
+                parameters=[parameter.to_parameter_msg() for parameter in parameters]
+            )
+        )
         _spin_until_future(self, future, timeout_s)
         response = future.result()
         if response is None or not response.result.successful:

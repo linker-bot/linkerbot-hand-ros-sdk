@@ -17,7 +17,6 @@ from rclpy.exceptions import InvalidHandle
 from rclpy.executors import (
     Executor,
     ExternalShutdownException,
-    MultiThreadedExecutor,
 )
 from rclpy.lifecycle import LifecycleNode, LifecycleState, TransitionCallbackReturn
 from rclpy.parameter import Parameter
@@ -29,6 +28,7 @@ from .driver_config import (
     validate_polling_plan,
 )
 from .driver_interfaces import DriverInterfaces
+from .executor import MultiThreadedExecutor
 from .parameter_updates import declare_driver_parameters, prepare_parameter_update
 from .transport_factory import create_hand_device
 
@@ -94,6 +94,7 @@ class LinkerbotHandNode(LifecycleNode):
         self._device: HandDevice | None = None
         self._interfaces: DriverInterfaces | None = None
         self._active = False
+        self._cleanup_incomplete = False
         self._destroying = False
         self._driver_destroyed = False
         self._parameter_callback_handle = self.add_on_set_parameters_callback(
@@ -103,6 +104,17 @@ class LinkerbotHandNode(LifecycleNode):
     def on_configure(self, state: LifecycleState) -> TransitionCallbackReturn:
         """Construct configuration, transport, SDK facade, and ROS entities only."""
 
+        # Failed configuration may still own entities or an SDK lease. Never
+        # replace those owners until their cleanup has actually succeeded.
+        if (
+            self._configuration is not None
+            or self._device is not None
+            or self._interfaces is not None
+        ):
+            if not self._release_runtime():
+                return TransitionCallbackReturn.FAILURE
+            self._device = None
+            self._configuration = None
         try:
             configuration = read_driver_configuration(
                 lambda name: self.get_parameter(name).value,
@@ -117,6 +129,7 @@ class LinkerbotHandNode(LifecycleNode):
                 is_active=lambda: self._active,
                 error_text=self._error_text,
             )
+            self._interfaces.create()
             result = super().on_configure(state)
             if result != TransitionCallbackReturn.SUCCESS:
                 raise RuntimeError("managed ROS entity configuration failed")
@@ -129,19 +142,17 @@ class LinkerbotHandNode(LifecycleNode):
             return TransitionCallbackReturn.SUCCESS
         except Exception as error:
             self._log_device_failure("configure", error)
-            self._active = False
-            self._close_device()
-            self._destroy_interfaces()
-            self._device = None
-            self._configuration = None
+            if self._release_runtime():
+                self._device = None
+                self._configuration = None
             return TransitionCallbackReturn.FAILURE
 
     def on_activate(self, state: LifecycleState) -> TransitionCallbackReturn:
         """Open, verify, start SDK polling, then enable ROS control surfaces."""
 
-        if self._parameter_fault is not None:
+        if self._parameter_fault is not None or self._cleanup_incomplete:
             self.get_logger().error(
-                "activate refused: parameter recovery requires cleanup"
+                "activate refused: incomplete recovery requires cleanup"
             )
             return TransitionCallbackReturn.FAILURE
         device = self._device
@@ -177,6 +188,9 @@ class LinkerbotHandNode(LifecycleNode):
         self._active = False
         success = self._deactivate_interfaces()
         success = self._stop_polling() and success
+        if not success:
+            self._cleanup_incomplete = True
+            return TransitionCallbackReturn.ERROR
         try:
             result = super().on_deactivate(state)
             success = success and result == TransitionCallbackReturn.SUCCESS
@@ -193,7 +207,9 @@ class LinkerbotHandNode(LifecycleNode):
     def on_cleanup(self, state: LifecycleState) -> TransitionCallbackReturn:
         """Close the SDK runtime and destroy all configured ROS entities."""
 
-        success = self._release_runtime()
+        if not self._release_runtime():
+            return TransitionCallbackReturn.ERROR
+        success = True
         try:
             result = super().on_cleanup(state)
             success = success and result == TransitionCallbackReturn.SUCCESS
@@ -202,7 +218,6 @@ class LinkerbotHandNode(LifecycleNode):
             self.get_logger().error(
                 f"managed ROS cleanup failed: {self._error_text(error)}"
             )
-        success = self._destroy_interfaces() and success
         if success:
             self._device = None
             self._configuration = None
@@ -223,7 +238,9 @@ class LinkerbotHandNode(LifecycleNode):
         state: LifecycleState,
         description: str,
     ) -> TransitionCallbackReturn:
-        success = self._release_runtime()
+        if not self._release_runtime():
+            return TransitionCallbackReturn.ERROR
+        success = True
         try:
             result = managed_callback(state)
             success = success and result == TransitionCallbackReturn.SUCCESS
@@ -232,7 +249,6 @@ class LinkerbotHandNode(LifecycleNode):
             self.get_logger().error(
                 f"managed ROS {description} failed: {self._error_text(error)}"
             )
-        success = self._destroy_interfaces() and success
         if success:
             self._device = None
             self._configuration = None
@@ -243,9 +259,9 @@ class LinkerbotHandNode(LifecycleNode):
     def _on_set_parameters(self, parameters: list[Parameter]) -> SetParametersResult:
         """Validate only; another on-set callback can still reject this update."""
 
-        if self._parameter_fault is not None:
+        if self._parameter_fault is not None or self._cleanup_incomplete:
             return SetParametersResult(
-                successful=False, reason="parameter recovery requires cleanup"
+                successful=False, reason="incomplete recovery requires cleanup"
             )
         prepared = prepare_parameter_update(
             parameters,
@@ -300,10 +316,8 @@ class LinkerbotHandNode(LifecycleNode):
                 self._parameter_update_in_progress = False
 
     def _parameter_snapshot(self) -> dict[str, Parameter]:
-        return {
-            name: self.get_parameter_or(name)
-            for name in self.list_parameters([], depth=0).names
-        }
+        # An empty prefix returns all declared parameters on Humble and Jazzy.
+        return self.get_parameters_by_prefix("")
 
     @staticmethod
     def _restoration_parameters(
@@ -415,21 +429,33 @@ class LinkerbotHandNode(LifecycleNode):
 
     def _rollback_activation(self, state: LifecycleState) -> None:
         self._active = False
-        self._deactivate_interfaces()
-        self._stop_polling()
+        success = self._deactivate_interfaces()
+        success = self._stop_polling() and success
+        if not success:
+            self._cleanup_incomplete = True
+            return
         try:
-            super().on_deactivate(state)
+            if super().on_deactivate(state) != TransitionCallbackReturn.SUCCESS:
+                raise RuntimeError("managed ROS entity activation rollback failed")
         except Exception as error:
+            self._cleanup_incomplete = True
             self.get_logger().error(
                 f"activate rollback failed: {self._error_text(error)}"
             )
-        self._close_device()
+            return
+        self._cleanup_incomplete = not self._close_device()
 
     def _release_runtime(self) -> bool:
+        self._cleanup_incomplete = True
         self._active = False
         success = self._deactivate_interfaces()
         success = self._stop_polling() and success
-        return self._close_device() and success
+        # SDK and ROS entities remain dependencies of outstanding workers and
+        # admitted callbacks. Destruction must not run after a drain timeout.
+        if not success or not self._destroy_interfaces() or not self._close_device():
+            return False
+        self._cleanup_incomplete = False
+        return True
 
     def _deactivate_interfaces(self) -> bool:
         if self._interfaces is None:
@@ -511,8 +537,7 @@ class LinkerbotHandNode(LifecycleNode):
         self._destroying = True
         try:
             released = self._release_runtime()
-            interfaces_destroyed = self._destroy_interfaces()
-            if not released or not interfaces_destroyed:
+            if not released:
                 raise RuntimeError(
                     "driver cleanup incomplete; retry cleanup/destroy_node before reusing resources"
                 )
@@ -556,26 +581,26 @@ def spin_until_shutdown(executor: Executor, logger: WarningLogger) -> None:
 def main(args: list[str] | None = None) -> None:
     rclpy.init(args=args)
     node: LinkerbotHandNode | None = None
-    executor = MultiThreadedExecutor(num_threads=CALLBACK_GROUPS_PER_HAND)
+    executor: MultiThreadedExecutor | None = None
     try:
+        executor = MultiThreadedExecutor(num_threads=CALLBACK_GROUPS_PER_HAND)
         node = LinkerbotHandNode()
         executor.add_node(node)
         spin_until_shutdown(executor, node.get_logger())
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        # Detach the node before stopping the pool so no in-flight handler races
-        # the destruction below.
-        try:
-            if node is not None:
-                executor.remove_node(node)
-        finally:
-            executor.shutdown()
-        try:
-            if node is not None:
-                node.destroy_node()
-        finally:
-            rclpy.try_shutdown()
+        if executor is not None:
+            for owned_node in executor.get_nodes():
+                executor.remove_node(owned_node)
+            if not executor.shutdown(timeout_sec=5.0):
+                raise RuntimeError(
+                    "executor cleanup incomplete; ROS resources retained"
+                )
+        executor = None
+        if node is not None:
+            node.destroy_node()
+        rclpy.try_shutdown()
 
 
 if __name__ == "__main__":

@@ -52,7 +52,7 @@ def test_partial_construction_rolls_back_plain_and_lifecycle_publishers():
     capabilities = get_declared_capabilities("o6", side="right")
 
     with pytest.raises(RuntimeError, match="construction failed"):
-        SnapshotPublisher(node, capabilities)
+        SnapshotPublisher(node, capabilities).create()
 
     assert set(node.destroyed_plain) == set(node.plain)
     assert set(node.destroyed_lifecycle) == set(node.lifecycle)
@@ -90,7 +90,7 @@ def test_destroy_releases_every_publisher_it_created(model, side):
 
     node = RecordingPublisherNode()
     capabilities = get_declared_capabilities(model, side=side)
-    publisher = SnapshotPublisher(node, capabilities)
+    publisher = SnapshotPublisher(node, capabilities).create()
 
     publisher.destroy()
 
@@ -104,7 +104,7 @@ def test_destroy_releases_every_publisher_it_created(model, side):
 def test_destroy_is_idempotent():
     node = RecordingPublisherNode()
     capabilities = get_declared_capabilities("o30", side="left")
-    publisher = SnapshotPublisher(node, capabilities)
+    publisher = SnapshotPublisher(node, capabilities).create()
 
     publisher.destroy()
     destroyed = len(node.destroyed_lifecycle) + len(node.destroyed_plain)
@@ -524,7 +524,7 @@ def test_o30_descriptor_force_publishes_sensors_and_resultant_topics():
 
     capabilities = get_declared_capabilities("o30", side="right")
 
-    publisher = SnapshotPublisher(_PassingNode(), capabilities)
+    publisher = SnapshotPublisher(_PassingNode(), capabilities).create()
 
     assert publisher._tactile_sensor_publisher is not None
     assert publisher._force_resultant_publisher is not None
@@ -616,7 +616,7 @@ def test_o30_publishes_decoded_fault_statuses_alongside_raw_faults():
     """
 
     capabilities = get_declared_capabilities("o30", side="right")
-    publisher = SnapshotPublisher(_RecordingNode(), capabilities)
+    publisher = SnapshotPublisher(_RecordingNode(), capabilities).create()
 
     assert publisher._fault_status_publisher is not None
     fault_telemetry = publisher._telemetry_publishers[TelemetrySemantic.FAULTS]
@@ -675,7 +675,7 @@ def test_o30_publishes_decoded_fault_statuses_alongside_raw_faults():
 def test_fault_status_topic_matches_documented_model_support(model, side, decoded):
     capabilities = get_declared_capabilities(model, side=side)
 
-    publisher = SnapshotPublisher(_RecordingNode(), capabilities)
+    publisher = SnapshotPublisher(_RecordingNode(), capabilities).create()
 
     assert (publisher._fault_status_publisher is not None) is decoded
 
@@ -708,7 +708,7 @@ def test_force_topics_follow_the_declared_projection(
 
     capabilities = get_declared_capabilities(model, side=side)
 
-    publisher = SnapshotPublisher(_RecordingNode(), capabilities)
+    publisher = SnapshotPublisher(_RecordingNode(), capabilities).create()
 
     assert (publisher._tactile_publisher is not None) is matrix_topic
     assert (publisher._tactile_sensor_publisher is not None) is descriptor_topics

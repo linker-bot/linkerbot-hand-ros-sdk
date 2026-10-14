@@ -10,8 +10,8 @@
 
 [English](README.md)
 
-使用 Ubuntu 24.04 / ROS 2 Jazzy，以及 Transport、Hand Python 和本仓库的最新
-`main` 源码；所有 ROS package 使用同一个系统 Python 环境安装和构建。
+Ubuntu 22.04 使用 ROS 2 Humble，Ubuntu 24.04 使用 Jazzy；依赖和本仓库使用最新
+`main`。使用对应的系统 Python，各 ROS 发行版使用独立工作空间。
 
 1. 按[快速入门](linkerbot_hand_ros/docs/zh/getting_started.md)安装并构建。
 2. [准备通信接口](linkerbot_hand_ros/docs/zh/connection.md)，启动唯一一只手：

@@ -9,8 +9,11 @@ import pytest
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import TextSubstitution
-from launch_ros.actions import PushROSNamespace
+from launch_ros.actions import LifecycleNode as LaunchLifecycleNode
+from launch_ros.actions import PushRosNamespace
+from launch_ros.events.lifecycle import StateTransition
 from launch_ros.utilities import evaluate_parameters, normalize_parameters
+from lifecycle_msgs.msg import State, TransitionEvent
 from linkerbot_hand import ValidationError
 from test_discovery_startup import _save_one
 
@@ -55,7 +58,7 @@ def _hand_launch(values, *, context=None):
 
 
 def test_hand_manual_keeps_original_defaults_and_lifecycle_launch(actions):
-    context, nodes = _hand_launch({})
+    context, nodes = _hand_launch({"autostart": "false"})
     node = nodes[0]
     assert node.kind == "lifecycle"
     assert node.executable == "hand_node"
@@ -65,6 +68,33 @@ def test_hand_manual_keeps_original_defaults_and_lifecycle_launch(actions):
         == '{"backend":"socketcan","channel":"can0"}'
     )
     assert node.namespace.perform(context) == ""
+
+
+def test_manual_autostart_only_activates_after_initial_configuration():
+    _context, actions = _hand_launch({})
+    configure, activate, driver = actions
+    assert isinstance(driver, LaunchLifecycleNode)
+    assert configure.event_handler.handle_once
+    assert activate.event_handler.handle_once
+    for start, goal, expected in (
+        ("configuring", "inactive", True),
+        ("deactivating", "inactive", False),
+        ("configuring", "unconfigured", True),
+        ("configuring", "errorprocessing", True),
+    ):
+        event = StateTransition(
+            action=driver,
+            msg=TransitionEvent(
+                start_state=State(label=start), goal_state=State(label=goal)
+            ),
+        )
+        assert activate.event_handler.matches(event) is expected
+
+
+def test_manual_autostart_false_creates_no_transition_handlers():
+    _context, actions = _hand_launch({"autostart": "false"})
+    assert len(actions) == 1
+    assert isinstance(actions[0], LaunchLifecycleNode)
 
 
 def test_hand_discover_routes_to_same_container_with_root_namespace_and_runtime_rates(
@@ -102,7 +132,7 @@ def test_single_discovery_namespace_follows_ros_parent_and_absolute_rules(
     actions, namespace, expected
 ):
     context = LaunchContext()
-    PushROSNamespace("/robot").execute(context)
+    PushRosNamespace("/robot").execute(context)
     _, nodes = _hand_launch(
         {"discover": "true", "namespace": namespace}, context=context
     )

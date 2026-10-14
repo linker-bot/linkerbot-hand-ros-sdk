@@ -11,8 +11,9 @@ This repository contains three independently discoverable ROS 2 packages:
 
 [简体中文](README_zh.md)
 
-Use Ubuntu 24.04 / ROS 2 Jazzy and the latest `main` of Transport, Hand Python and
-this repository. Install and build all ROS packages with the same system Python.
+Use ROS 2 Humble on Ubuntu 22.04 or Jazzy on Ubuntu 24.04, with the latest `main`
+of Transport, Hand Python and this repository. Use the matching system Python
+and a separate workspace for each ROS distribution.
 
 1. [Install and build](linkerbot_hand_ros/docs/getting_started.md).
 2. [Prepare the adapter](linkerbot_hand_ros/docs/connection.md), then launch one hand:

@@ -9,7 +9,10 @@
 - deactivate stops commands and polling, retaining the connection without implicit motion/hold commands.
 - cleanup/shutdown/error attempts bounded worker/device shutdown; failed cleanup retains resources for retry and reports errors.
 
-Launch defaults to `autostart:=true`. For external management:
+Launch defaults to `autostart:=true`. Manual single-hand launch (`discover:=false`)
+automatically configures and activates only at startup. After an initial failure or
+cleanup, a subsequent configure stays inactive until an explicit activate.
+For external management:
 
 ```bash
 ros2 launch linkerbot_hand_ros hand.launch.py autostart:=false

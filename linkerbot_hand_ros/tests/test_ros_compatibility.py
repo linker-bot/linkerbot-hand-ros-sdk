@@ -101,7 +101,7 @@ def test_launch_exposes_every_driver_parameter() -> None:
     assert 'DeclareLaunchArgument("autostart"' in source
 
 
-def test_launch_uses_jazzy_lifecycle_node_with_autostart() -> None:
+def test_launch_uses_portable_lifecycle_events_for_autostart() -> None:
     source = (PACKAGE_ROOT / "linkerbot_hand_ros/discovery_launch.py").read_text(
         encoding="utf-8"
     )
@@ -115,7 +115,11 @@ def test_launch_uses_jazzy_lifecycle_node_with_autostart() -> None:
     ]
 
     assert len(lifecycle_nodes) == 1
-    assert any(keyword.arg == "autostart" for keyword in lifecycle_nodes[0].keywords)
+    assert not any(
+        keyword.arg == "autostart" for keyword in lifecycle_nodes[0].keywords
+    )
+    assert "OnProcessStart" in source
+    assert "OnStateTransition" in source
 
 
 def test_multi_hand_launch_preserves_each_internal_node_name() -> None:
@@ -272,7 +276,7 @@ def test_rosdep_instructions_fail_on_unresolved_dependencies() -> None:
             if line.startswith("rosdep install ")
         ]
         assert commands
-        assert all("--rosdistro jazzy" in command for command in commands)
+        assert all('--rosdistro "${ROS_DISTRO}"' in command for command in commands)
         assert all(" -r " not in command for command in commands)
 
 

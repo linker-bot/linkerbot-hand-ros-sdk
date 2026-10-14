@@ -6,11 +6,16 @@ Stop target publishers, deactivate/cleanup drivers and exit their processes befo
 Keep local changes; if switching or fast-forwarding fails, resolve the branch state before continuing.
 Do not reset a working tree to bypass the error.
 
+Choose the distribution matching your OS using the [installation guide](getting_started.md#1-choose-a-ros-distribution-and-prepare-the-environment).
+The commands below use separate venvs and workspaces per distribution; adjust paths for existing installations.
+Use a separate workspace when changing ROS distributions; generated build/install artifacts cannot be shared.
+
 Open a fresh terminal and load the build environment:
+First set `export LINKERBOT_ROS_DISTRO=humble` or `export LINKERBOT_ROS_DISTRO=jazzy`.
 
 ```bash
-source /opt/ros/jazzy/setup.bash
-source ~/venvs/linkerbot-hand-ros/bin/activate
+source "/opt/ros/${LINKERBOT_ROS_DISTRO}/setup.bash"
+source "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}/bin/activate"
 ```
 
 Set Transport, Hand and ROS origins to their current repository URLs, update all three
@@ -25,10 +30,10 @@ git -C ~/linkerbot_deps/linkerbot-hand remote set-url origin \
   https://gitea.linkerhub.work/linker-bot/linkerbot-hand-python.git
 git -C ~/linkerbot_deps/linkerbot-hand switch main
 git -C ~/linkerbot_deps/linkerbot-hand pull --ff-only origin main
-git -C ~/linkerbot_ws/src/linkerbot-hand-ros remote set-url origin \
+git -C "$HOME/linkerbot_${ROS_DISTRO}_ws/src/linkerbot-hand-ros" remote set-url origin \
   https://gitea.linkerhub.work/linker-bot/linkerbot-hand-ros2.git
-git -C ~/linkerbot_ws/src/linkerbot-hand-ros switch main
-git -C ~/linkerbot_ws/src/linkerbot-hand-ros pull --ff-only origin main
+git -C "$HOME/linkerbot_${ROS_DISTRO}_ws/src/linkerbot-hand-ros" switch main
+git -C "$HOME/linkerbot_${ROS_DISTRO}_ws/src/linkerbot-hand-ros" pull --ff-only origin main
 python -m pip install -e "$HOME/linkerbot_deps/linkerbot-transport[all]" \
   -e "$HOME/linkerbot_deps/linkerbot-hand"
 ```
@@ -36,12 +41,12 @@ python -m pip install -e "$HOME/linkerbot_deps/linkerbot-transport[all]" \
 Rebuild the workspace and downstream message consumers:
 
 ```bash
-cd ~/linkerbot_ws
-rosdep install --from-paths src --ignore-src -y --rosdistro jazzy
-rosdep check --from-paths src --ignore-src --rosdistro jazzy
+cd "$HOME/linkerbot_${ROS_DISTRO}_ws"
+rosdep install --from-paths src --ignore-src -y --rosdistro "${ROS_DISTRO}"
+rosdep check --from-paths src --ignore-src --rosdistro "${ROS_DISTRO}"
 python -m colcon build --symlink-install \
   --cmake-args -DPython3_EXECUTABLE="$(command -v python)"
-source ~/linkerbot_ws/install/setup.bash
+source "$HOME/linkerbot_${ROS_DISTRO}_ws/install/setup.bash"
 python -c 'import linkerbot_transport, linkerbot_hand; print("Python dependencies: OK")'
 ros2 pkg prefix linkerbot_hand_msgs
 ros2 pkg prefix linkerbot_hand_ros
@@ -66,5 +71,5 @@ To record the exact sources used for a deployment:
 ```bash
 git -C ~/linkerbot_deps/linkerbot-transport rev-parse HEAD
 git -C ~/linkerbot_deps/linkerbot-hand rev-parse HEAD
-git -C ~/linkerbot_ws/src/linkerbot-hand-ros rev-parse HEAD
+git -C "$HOME/linkerbot_${ROS_DISTRO}_ws/src/linkerbot-hand-ros" rev-parse HEAD
 ```

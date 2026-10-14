@@ -100,6 +100,8 @@ class FakeRuntime:
         # Let a test hold read_device_info open to model a slow management read.
         self.device_info_gate: threading.Event | None = None
         self.device_info_entered = threading.Event()
+        self.device_info_started_at: float | None = None
+        self.health_get_times: list[float] = []
         self.open_error: Exception | None = None
         self._opened = False
         self._polling = False
@@ -207,6 +209,7 @@ class FakeRuntime:
     def read_device_info(self, _timeout: float) -> DeviceInfo:
         self._require_open()
         self.device_info_threads.append(threading.current_thread().name)
+        self.device_info_started_at = time.monotonic()
         self.device_info_entered.set()
         if self.device_info_gate is not None:
             # Bounded so a failing assertion cannot hang the whole test session.
@@ -264,6 +267,7 @@ class FakeRuntime:
         return snapshot
 
     def get_health(self):
+        self.health_get_times.append(time.monotonic())
         self.health_get_count += 1
         return self.health
 

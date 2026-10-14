@@ -270,7 +270,11 @@ def test_declared_raw_services_query_fresh_samples_over_dds(rig):
             STATE_QOS,
         )
         try:
-            rig.spin_until(subscription.get_publisher_count)
+            rig.spin_until(
+                lambda subscription=subscription: rig.consumer.count_publishers(
+                    subscription.topic_name
+                )
+            )
             for value in (12, 13):
                 before = len(rig.peer.sent)
                 old = getattr(device.get_snapshot(), semantic.value)
@@ -399,7 +403,7 @@ def test_live_current_polling_is_separate_from_configuration(rig):
         HandTelemetry, "/linkerbot_hand/state/currents", states.append, STATE_QOS
     )
     try:
-        rig.spin_until(subscription.get_publisher_count)
+        rig.spin_until(lambda: rig.consumer.count_publishers(subscription.topic_name))
         assert rig.driver.set_parameters_atomically(
             [Parameter("current_hz", value=10.0)]
         ).successful
@@ -479,8 +483,8 @@ def test_echo_topics_and_services_do_not_replace_live_measurements(
         rig.spin_until(
             lambda: (
                 publisher.get_subscription_count()
-                and state_subscription.get_publisher_count()
-                and status_subscription.get_publisher_count()
+                and rig.consumer.count_publishers(state_subscription.topic_name)
+                and rig.consumer.count_publishers(status_subscription.topic_name)
             )
         )
         rig.peer.echo_value = 190
@@ -612,7 +616,10 @@ def test_o6_recovery_invalidates_limit_cache_until_a_new_write_echo(rig):
     recovery = rig.consumer.create_client(Recover, "/linkerbot_hand/recover")
     try:
         rig.spin_until(
-            lambda: subscription.get_publisher_count() and recovery.service_is_ready()
+            lambda: (
+                rig.consumer.count_publishers(subscription.topic_name)
+                and recovery.service_is_ready()
+            )
         )
         future = recovery.call_async(Recover.Request(timeout_s=1.0))
         rig.spin_until(future.done)
