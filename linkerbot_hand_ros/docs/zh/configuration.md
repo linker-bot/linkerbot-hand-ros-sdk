@@ -1,7 +1,5 @@
 # Lifecycle 与参数配置
 
-[English](../configuration.md) · [使用手册](../../README_zh.md)
-
 ## Lifecycle 行为
 
 - configure：校验参数，构造设备和 ROS 实体；不打开设备或发送查询。
@@ -159,3 +157,5 @@ ros2 launch linkerbot_hand_ros multi_hand.launch.py config:=/absolute/path/hands
 `device_namespaces` 必须非空且不重复，并有对应节点参数段。`autostart` 默认 true；设 false 时
 逐个管理 `/<namespace>/linkerbot_hand`。不同 channel 拥有独立 transport runtime。
 需要扫描生成及身份约束时使用[发现部署](discovery.md)，其 YAML 与 ROS 参数文件结构不同。
+
+[返回总览](getting_started.md) · [English](../configuration.md)

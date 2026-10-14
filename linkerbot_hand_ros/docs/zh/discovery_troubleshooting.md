@@ -1,7 +1,5 @@
 # 发现与部署排障
 
-[English](../discovery_troubleshooting.md) | [故障排查](troubleshooting.md)
-
 先确认平台：Linux 为 SocketCAN（经典 CAN/CAN FD）、MiniCANFD；Windows 为 PCAN（经典 CAN/CAN FD）、MiniCANFD、SLCAN（CAN FD）。`backends` 不会启用其他平台的来源。出现 `backend ... is unavailable on this platform` 时先选择本平台模板；Linux 下若适配器已经暴露为 SocketCAN 网络接口，应使用 SocketCAN，串口 SLCAN 模式不属于此入口范围。
 
 先保留同一次启动的扫描摘要、失败行及最后的生命周期错误。关注 `operation`（SDK 操作）、`backend`、`channel`/`native_channel`、`protocol`、角色 namespace 和配置路径；`stage` 是容器阶段，`cause` 是原始异常。SDK 不提供的字段不会推测，`backend=selection` 表示接口筛选阶段，不是物理适配器。配置模板见[配置示例](discovery_examples.md)。
@@ -56,7 +54,7 @@ ls -l /dev/bus/usb
 通道 0 有任意身份候选即停止回退。显式指定通道会关闭此自动回退。
 需要固定布局时填写已确认的 `linux_channels`，不要从设备数量推测通道。
 Windows 用 DLL devNum 作为 device_index，channel_index 为 0，不填写 Linux 布局。
-完整规则见[连接说明](connection.md#minicanfd)。
+完整规则见[连接说明](manual_connection.md#minicanfd)。
 
 ## `unsupported_protocol` 或 FD 配方错误
 
@@ -75,3 +73,5 @@ Windows 用 DLL devNum 作为 device_index，channel_index 为 0，不填写 Lin
 激活/恢复的身份不符会拒绝控制。检查 node/namespace、接口、request/response ID、L30 Node ID 和原始 cause；文件匹配失败还显示保存的 `match` 条件。核对是否换手、换线、升级固件或编辑了选择条件，有序 cleanup 后重新发现并确认角色；不要删除身份条件来让错误设备通过。新生成文件使用新路径，保留原配置供核对。
 
 模板中没有序列号的绑定只能提供型号/侧别/接口/端点约束，不能保证永久物理身份；生产部署优先生成现场文件。实机仍需独立验收。
+
+[返回总览](getting_started.md) · [English](../discovery_troubleshooting.md)

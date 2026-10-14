@@ -1,6 +1,6 @@
 # O6 图形界面
 
-[ROS 使用手册](../linkerbot_hand_ros/README_zh.md) · [安装与构建](../linkerbot_hand_ros/docs/zh/getting_started.md)
+[ROS 使用手册](../linkerbot_hand_ros/README_zh.md) · [安装与构建](../linkerbot_hand_ros/docs/zh/quick_start.md)
 
 通过 URDF 滑块预览 O6，并通过 ROS bridge 控制实机。GUI 不打开 CAN 或创建 `HandDevice`，
 设备 I/O 由驱动负责；支持左右 O6，不提供其他型号或指尖拖动/IK。
@@ -26,7 +26,7 @@ O6 右手拇指 GLB 的缺失颜色槽会在用户缓存副本中补齐，不修
 
 ## 仅预览
 
-每个终端先[加载环境](../linkerbot_hand_ros/docs/zh/getting_started.md#4-每个终端加载环境)。
+每个终端先[加载环境](../linkerbot_hand_ros/docs/zh/quick_start.md#4-每个终端加载环境)。
 `preview_only:=true` 只启动 URDF、独立滑块窗口和 RViz，无需设备，也不加载 SDK 或创建 bridge：
 
 ```bash

@@ -1,7 +1,5 @@
 # 自动发现配置示例
 
-[English](../discovery_examples.md) | [使用手册](../../README_zh.md)
-
 以下文件随驱动安装到 `share/linkerbot_hand_ros/config`，源码位于本包 `config`。它们是可校验的模板；接口、时序、固件和厂商库必须按现场填写，软件加载通过不代表适配器实机验收通过。
 
 ## 平台范围
@@ -42,18 +40,18 @@ ros2 launch linkerbot_hand_ros hand.launch.py discover:=true "discovery_config:=
 
 ## 四类适配器
 
-- [discovery-socketcan.yaml](../../config/discovery-socketcan.yaml)：显式 `can0`；系统接口须已配置。`ip -details link show can0` 可只读检查 UP、CAN/CAN FD 和速率，扫描不会配置接口。
-- [discovery-pcan-classic.yaml](../../config/discovery-pcan-classic.yaml)：Windows 经典 CAN，原生通道 `PCAN_USBBUS1`；修改为实际 PCAN 通道并匹配设备速率。
-- [discovery-pcan-fd.yaml](../../config/discovery-pcan-fd.yaml)：Windows FD 模式与完整 `BitTimingFd` 配方，示例为 80 MHz 时钟、1 Mbit/s 仲裁、5 Mbit/s 数据；仅用于已确认 FD 能力的适配器，按硬件时钟和总线时序修改。
-- [discovery-slcan-windows.yaml](../../config/discovery-slcan-windows.yaml)：Windows 显式 `COM5`，针对已确认的 CANable 2.0 FD 固件。`tty_baudrate` 是串口速率，不是 CAN 速率；任意串口设备或其他固件不能据此宣称支持 FD。
-- [discovery-minicanfd-linux.yaml](../../config/discovery-minicanfd-linux.yaml)：填写真实 `libcanbus.so` 路径及已确认的设备/通道布局；`{0: [0]}` 只是模板，不能由设备数量猜通道。
-- [discovery-minicanfd-windows.yaml](../../config/discovery-minicanfd-windows.yaml)：填写 `HCanbus.dll` 路径，省略 Linux 布局；`minicanfd:0:0` 的第一项为 DLL 的 `devNum`，后一项固定为 0。
+- `discovery-socketcan.yaml`：显式 `can0`；系统接口须已配置。`ip -details link show can0` 可只读检查 UP、CAN/CAN FD 和速率，扫描不会配置接口。
+- `discovery-pcan-classic.yaml`：Windows 经典 CAN，原生通道 `PCAN_USBBUS1`；修改为实际 PCAN 通道并匹配设备速率。
+- `discovery-pcan-fd.yaml`：Windows FD 模式与完整 `BitTimingFd` 配方，示例为 80 MHz 时钟、1 Mbit/s 仲裁、5 Mbit/s 数据；仅用于已确认 FD 能力的适配器，按硬件时钟和总线时序修改。
+- `discovery-slcan-windows.yaml`：Windows 显式 `COM5`，针对已确认的 CANable 2.0 FD 固件。`tty_baudrate` 是串口速率，不是 CAN 速率；任意串口设备或其他固件不能据此宣称支持 FD。
+- `discovery-minicanfd-linux.yaml`：填写真实 `libcanbus.so` 路径及已确认的设备/通道布局；`{0: [0]}` 只是模板，不能由设备数量猜通道。
+- `discovery-minicanfd-windows.yaml`：填写 `HCanbus.dll` 路径，省略 Linux 布局；`minicanfd:0:0` 的第一项为 DLL 的 `devNum`，后一项固定为 0。
 
 MiniCANFD 两份模板显式使用 `config: 6`（0x06，不启用内置终端电阻），其余配置保留 SDK 默认；按实际接线确认外置/内置终端方案后编辑，扫描不会替用户选择。厂商库不随 ROS 或 SDK 分发。
 
 ## 一手、双手的固定部署
 
-[deployment-single.yaml](../../config/deployment-single.yaml) 为 L6 左手/can0、角色 `/left_hand`；[deployment-dual.yaml](../../config/deployment-dual.yaml) 再加入 O6 右手/can1、角色 `/right_hand`。它们使用实际经典 CAN 左/右地址，但不是现场扫描记录，未填写序列号；不能保证同型号同侧设备更换后仍识别为原来那只手。生产部署优先生成现场文件。
+`deployment-single.yaml` 为 L6 左手/can0、角色 `/left_hand`；`deployment-dual.yaml` 再加入 O6 右手/can1、角色 `/right_hand`。它们使用实际经典 CAN 左/右地址，但不是现场扫描记录，未填写序列号；不能保证同型号同侧设备更换后仍识别为原来那只手。生产部署优先生成现场文件。
 
 模板设为 `autostart: false`，加载后仍扫描并创建未配置节点，等待生命周期管理，并非无设备 I/O 的文件检查。核对接线与绑定后才运行：
 
@@ -73,4 +71,6 @@ ros2 launch linkerbot_hand_ros multi_hand.launch.py config:=./hands-lab.yaml
 生成文件保留可取得的身份条件、实际端点、namespace 和逐手参数；新设备不自动加入，已有输出不覆盖。跨后端使用对应高级模板生成，例：`discover:=true discovery_config:=/实际路径/discovery-pcan-fd.yaml output:=./hands-pcan.yaml`。
 
 模板固定了明确的通道范围；使用 MiniCANFD 自动枚举时，省略全局通道筛选和 Linux 布局，
-规则见[连接说明](connection.md#minicanfd)。启动失败见[发现与部署排障](discovery_troubleshooting.md)。
+规则见[连接说明](manual_connection.md#minicanfd)。启动失败见[发现与部署排障](discovery_troubleshooting.md)。
+
+[返回总览](getting_started.md) · [English](../discovery_examples.md)

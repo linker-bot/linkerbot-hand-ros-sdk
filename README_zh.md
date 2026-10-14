@@ -13,7 +13,7 @@
 Ubuntu 22.04 使用 ROS 2 Humble，Ubuntu 24.04 使用 Jazzy；依赖和本仓库使用最新
 `main`。使用对应的系统 Python，各 ROS 发行版使用独立工作空间。
 
-1. 按[快速入门](linkerbot_hand_ros/docs/zh/getting_started.md)安装并构建。
+1. 按[快速入门](linkerbot_hand_ros/docs/zh/quick_start.md)安装并构建。
 2. [准备通信接口](linkerbot_hand_ros/docs/zh/connection.md)，启动唯一一只手：
 
    ```bash
@@ -23,7 +23,7 @@ Ubuntu 22.04 使用 ROS 2 Humble，Ubuntu 24.04 使用 Jazzy；依赖和本仓�
 3. 在另一个已加载环境的终端读取首组角度：
 
    ```bash
-   ros2 topic echo --once /linkerbot_hand/state/angles
+   ros2 topic echo --once --qos-reliability best_effort /linkerbot_hand/state/angles
    ```
 
 [完整使用手册](linkerbot_hand_ros/README_zh.md) ·

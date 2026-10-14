@@ -1,6 +1,4 @@
-# Tactile fields
-
-[简体中文](zh/force.md) · [Manual](../README.md)
+# Tactile data
 
 The latest SDK `main` exposes named tactile fields through `HandForceField` on
 `~/state/force_<field>`. ROS publishes SDK cache data; it does not add CAN queries.
@@ -82,3 +80,5 @@ For TASHAN_GATHER, fn=10, ft=20, fd=15, px=5 Hz requests one 20 Hz transaction, 
 SDK changes wake publication immediately. Diagnostics expose
 `force_<field>_requested_hz/query_hz/achieved_hz` and `query_channel`.
 Do not add shared-field sample rates to estimate bus traffic; use physical `channel_*` counters.
+
+[Back to overview](getting_started.md) · [简体中文](zh/force.md)

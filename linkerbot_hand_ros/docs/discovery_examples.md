@@ -1,7 +1,5 @@
 # Discovery configuration examples
 
-English | [简体中文](zh/discovery_examples.md) | [Manual](../README.md)
-
 The driver installs these templates under `share/linkerbot_hand_ros/config`; sources are in this package's `config` directory. Adjust ports, timing, firmware and native libraries for your hardware. Passing software validation does not constitute adapter acceptance.
 
 ## Platform scope
@@ -42,18 +40,18 @@ ros2 launch linkerbot_hand_ros hand.launch.py discover:=true "discovery_config:=
 
 ## Adapter templates
 
-- [discovery-socketcan.yaml](../config/discovery-socketcan.yaml): explicit `can0`, already configured by the host. Read its UP state, CAN/FD mode and bitrates with `ip -details link show can0`; discovery does not configure links.
-- [discovery-pcan-classic.yaml](../config/discovery-pcan-classic.yaml): Windows classic CAN, native `PCAN_USBBUS1`; match the actual adapter channel and device bitrate.
-- [discovery-pcan-fd.yaml](../config/discovery-pcan-fd.yaml): Windows FD-only policy and a complete `BitTimingFd` recipe. The example assumes an 80 MHz clock, 1 Mbit/s arbitration and 5 Mbit/s data. Confirm FD support and adjust clock/timing for the adapter and bus.
-- [discovery-slcan-windows.yaml](../config/discovery-slcan-windows.yaml): Windows explicit `COM5`, for verified CANable 2.0 FD firmware. `tty_baudrate` is serial speed, separate from CAN bitrate; arbitrary serial devices/firmware are not implied to support FD.
-- [discovery-minicanfd-linux.yaml](../config/discovery-minicanfd-linux.yaml): replace the `libcanbus.so` path and confirmed Linux device/channel layout. `{0: [0]}` is a template, not a channel count inferred from enumerated devices.
-- [discovery-minicanfd-windows.yaml](../config/discovery-minicanfd-windows.yaml): replace the `HCanbus.dll` path; omit Linux layouts. The first index in `minicanfd:0:0` is DLL `devNum`, with channel index 0.
+- `discovery-socketcan.yaml`: explicit `can0`, already configured by the host. Read its UP state, CAN/FD mode and bitrates with `ip -details link show can0`; discovery does not configure links.
+- `discovery-pcan-classic.yaml`: Windows classic CAN, native `PCAN_USBBUS1`; match the actual adapter channel and device bitrate.
+- `discovery-pcan-fd.yaml`: Windows FD-only policy and a complete `BitTimingFd` recipe. The example assumes an 80 MHz clock, 1 Mbit/s arbitration and 5 Mbit/s data. Confirm FD support and adjust clock/timing for the adapter and bus.
+- `discovery-slcan-windows.yaml`: Windows explicit `COM5`, for verified CANable 2.0 FD firmware. `tty_baudrate` is serial speed, separate from CAN bitrate; arbitrary serial devices/firmware are not implied to support FD.
+- `discovery-minicanfd-linux.yaml`: replace the `libcanbus.so` path and confirmed Linux device/channel layout. `{0: [0]}` is a template, not a channel count inferred from enumerated devices.
+- `discovery-minicanfd-windows.yaml`: replace the `HCanbus.dll` path; omit Linux layouts. The first index in `minicanfd:0:0` is DLL `devNum`, with channel index 0.
 
 Both MiniCANFD templates explicitly set `config: 6` (0x06, built-in termination disabled), retaining other SDK defaults. Verify the physical termination arrangement before editing. Native libraries are not distributed with ROS or the SDK.
 
 ## Fixed single/dual deployments
 
-[deployment-single.yaml](../config/deployment-single.yaml) binds L6 left/can0 to `/left_hand`. [deployment-dual.yaml](../config/deployment-dual.yaml) adds O6 right/can1 at `/right_hand`. They use the actual classic CAN left/right addresses, but are not a record of your devices and omit serial identities. Endpoint-only matching cannot guarantee the original physical hand after a same-model/side replacement. Prefer generating a deployment from the installation.
+`deployment-single.yaml` binds L6 left/can0 to `/left_hand`. `deployment-dual.yaml` adds O6 right/can1 at `/right_hand`. They use the actual classic CAN left/right addresses, but are not a record of your devices and omit serial identities. Endpoint-only matching cannot guarantee the original physical hand after a same-model/side replacement. Prefer generating a deployment from the installation.
 
 Templates use `autostart: false`; loading still scans and creates unconfigured nodes awaiting lifecycle management. It is not a zero-I/O validation command. Check wiring/bindings before running:
 
@@ -73,5 +71,7 @@ ros2 launch linkerbot_hand_ros multi_hand.launch.py config:=./hands-lab.yaml
 Generated files retain available identity constraints, observed endpoints, namespaces and per-hand parameters. New devices are not added and existing output is not overwritten. For another backend, generate using its settings template, e.g. `discover:=true discovery_config:=/actual/path/discovery-pcan-fd.yaml output:=./hands-pcan.yaml`.
 
 The templates fix explicit channels. To use automatic MiniCANFD enumeration, omit
-global channel filters and Linux channel layouts as described in [connection](connection.md#minicanfd).
+global channel filters and Linux channel layouts as described in [connection](manual_connection.md#minicanfd).
 For startup failures see [discovery troubleshooting](discovery_troubleshooting.md).
+
+[Back to overview](getting_started.md) · [简体中文](zh/discovery_examples.md)

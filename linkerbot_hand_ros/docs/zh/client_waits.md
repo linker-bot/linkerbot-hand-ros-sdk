@@ -1,6 +1,8 @@
 # 客户端等待
 
-[English](../client_waits.md) | [使用手册](../../README_zh.md)
+客户端等待用于确认指定驱动就绪和观察协议命令结果；所属节点必须持续 spin。
+
+## 就绪条件
 
 就绪要求已验证的 capability、指定驱动 `get_state` 返回 active 的新鲜响应，
 以及 ROS 图中属于该驱动的命令订阅。录包或其他观察者订阅命令 Topic 不会让客户端就绪。
@@ -9,6 +11,8 @@
 驱动收到每条命令时仍会检查 Lifecycle 和设备状态。
 
 `HandCommandClient` 用独立 callback group 处理元数据、状态和等待超时；所属 Node 必须 spin。
+
+## 按调用位置选择
 
 | 调用位置 | 等待方式 |
 | --- | --- |
@@ -19,6 +23,8 @@
 异步方法返回 **rclpy Future**，用于 ROS executor 协程或 `add_done_callback`，
 不能直接交给独立运行的 asyncio loop。回调内不要调用 `spin_until_future_complete`
 或嵌套 spin；单线程同步等待会阻止消息处理，多线程全部被占用时同样如此。
+
+## 异步等待示例
 
 ```python
 async def send_target(self, target):
@@ -35,6 +41,10 @@ async def send_target(self, target):
 高频控制用 `is_ready`、发布和后续 tick 的 `get_status`，不要逐次阻塞。
 异步等待释放 executor 线程，但仍占用该互斥 callback group；客户端接收逻辑使用独立组。
 
+## 超时与销毁
+
 超时按经过的实际时间计算，不受暂停的 ROS 仿真时间影响。取消 Future 只取消等待，
 超时或取消都不会撤回已发布命令。先销毁客户端再销毁 Node，未完成等待会以 `RuntimeError` 失败。
 协议终态不代表机械到位；示例中的 `status` 还需检查失败/覆盖等 stage。
+
+[返回总览](getting_started.md) · [English](../client_waits.md)

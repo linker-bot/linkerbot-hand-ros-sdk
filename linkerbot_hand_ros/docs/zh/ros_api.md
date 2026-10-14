@@ -1,7 +1,5 @@
 # ROS 2 API 参考
 
-[English](../ros_api.md) · [使用手册](../../README_zh.md)
-
 默认节点名为 `/linkerbot_hand`。所有向量顺序、范围、单位说明和支持性均读取
 `/linkerbot_hand/capabilities`，ROS 不维护第二份型号表。
 
@@ -185,7 +183,7 @@ finger name、rows、columns 和 row-major raw；一个消息代表一次完整�
 单指计算频率。
 
 触觉字段通过 `HandForceField` 发布；点阵、descriptor、FnS、字段有效性及共享查询见
-[触觉指南](force.md)。消息结构见[消息包说明](../../../linkerbot_hand_msgs/README.md)。
+[触觉指南](force.md)。消息结构见[消息包说明](messages.md)。
 
 <a id="o30-tashan_gather-单值字段"></a>
 O30 TASHAN_GATHER 提供 fn/ft/fd/px 单值，按实际 descriptor 和 `valid_values` 使用，
@@ -328,3 +326,5 @@ SDK 缓存变化唤醒独立发布线程，sequence 或有效性变化时发布�
 相同序号的 stale/valid 变化不是新设备采样。`publish_rate_hz` 正值用于空闲有效性复查，
 0 暂停 ROS 状态发布；polling=0 不清除缓存，也不阻止写回包更新。
 生产 ROS 入口使用多线程 executor；等待规则见[客户端等待](client_waits.md)。
+
+[返回总览](getting_started.md) · [English](../ros_api.md)

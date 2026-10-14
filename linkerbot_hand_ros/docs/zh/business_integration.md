@@ -1,7 +1,5 @@
 # 业务节点集成
 
-[English](../business_integration.md) | [使用手册](../../README_zh.md)
-
 业务节点通过 `HandCommandClient` 与 `linkerbot_hand_msgs` 接入驱动；驱动的 `HandDevice`
 负责设备 I/O。业务无需打开 CAN、导入 SDK 型号类或维护另一份型号范围表。
 
@@ -24,7 +22,7 @@
 
 连续命令使用 best-effort、depth 1 和 latest-wins；业务按最新目标设计，不能假设历史
 setpoint 全部下发。`SUPERSEDED` 表示目标在 transport claim 前确认未发送。
-高频控制用非阻塞状态机；低频异步调用见[示例](examples.md#常驻-python-客户端)。
+高频控制用非阻塞状态机；低频异步调用见[示例](examples.md#可运行的-python-客户端)。
 
 | 阶段 | 能证明什么 |
 | --- | --- |
@@ -71,3 +69,5 @@ Topic 在 SDK 接受前的拒绝可能只出现在 diagnostics，不能只等待
 每只手使用独立物理通道、namespace、客户端及反馈状态机。
 `multi_hand.launch.py` 提供组启动与失败回滚，参数见[多设备配置](configuration.md#多设备)。
 namespace 不能隔离同一总线上的设备报文，也不能保证不同型号有相同关节数或能力。
+
+[返回总览](getting_started.md) · [English](../business_integration.md)

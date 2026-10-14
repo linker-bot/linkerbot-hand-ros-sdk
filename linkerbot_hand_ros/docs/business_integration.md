@@ -1,7 +1,5 @@
 # Application integration
 
-English | [简体中文](zh/business_integration.md) | [Manual](../README.md)
-
 Applications use `HandCommandClient` and `linkerbot_hand_msgs`; the driver's
 `HandDevice` owns device I/O. Do not reopen CAN or maintain a second model/range table.
 
@@ -26,7 +24,7 @@ publish target → observe SDK admission/dispatch/ACK → inspect fresh angles �
 Continuous commands use best-effort depth 1 and latest-wins scheduling. Design around
 the latest target; historical setpoints need not all reach the bus. `SUPERSEDED` means
 confirmed unsent before transport claim. Use a nonblocking state machine for high-rate
-control and the [async example](examples.md#persistent-python-client) for occasional commands.
+control and the [async example](examples.md#runnable-python-client) for occasional commands.
 
 | Stage | Evidence |
 | --- | --- |
@@ -77,3 +75,5 @@ failures before opening another driver on the same interface.
 Each hand needs a separate physical channel, namespace, client and feedback state machine.
 `multi_hand.launch.py` supports group startup/rollback; see [configuration](configuration.md#multi-device).
 Namespaces do not isolate bus traffic or make capabilities identical across models.
+
+[Back to overview](getting_started.md) · [简体中文](zh/business_integration.md)

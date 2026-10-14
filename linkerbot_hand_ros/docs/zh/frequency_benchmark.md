@@ -1,57 +1,13 @@
-# ROS 角度与完整触觉频率测试
+# 频率测试
 
-`frequency_benchmark` 只测试两种等工作量场景：
-
-1. percent 角度连续提交 + 角度查询/反馈。
-2. percent 角度连续提交 + 角度查询/反馈 + 完整多指触觉事务。
-
-它不会设置速度、电流上限或转矩上限，也不把单个关节、触觉 cell、单指或 CAN 分片
-当成独立样本。默认目标取首次有效 percent 角度，`angle_amplitude=0`，因此目标保持起始姿态，但仍持续发送实机命令，不能视作只读测试。
-
-工具在能力发现完成后根据 force 的 `payload_projection` 选择矩阵或 descriptor 话题。
-自动配置会清零所有 `force_<字段>_hz`，再设置 `force_hz`，避免继承旧字段频率
-形成意外额外负载。L20Lite 的 `force_hz` 默认包含 fn 与 fns 两个独立查询；本工具的
-触觉成功率仍统计点阵/descriptor 完整轮次。需要只测点阵时可用
-`force_fn_hz` 手动配置并选择 `--no-configure-driver`。
-O30 同时观察 `state/tactile_sensors` 与 `state/normal_force_resultant`；后者以
-`resultant_cache/resultant_ros` 独立输出，不增加 `tactile_*` 的计数。
-一次 descriptor 消息必须包含能力声明的全部传感器身份；明确缺失的传感器可为空数据，
-畸形、缺指或字段不完整的消息不算有效完整样本。没有 FnS 的传感器仍可测 descriptor 频率，
-此时合力频率无样本。首次元数据读取与缓存后的持续采集成本不同，预热应覆盖首次完整触觉。
-设备单位、真实受压响应和机械到位不由此频率工具证明。
-
-## 为什么不能只用 `ros2 topic hz`
-
-ROS publish callback 频率、设备采样频率和命令 transport 发送频率不是一个指标。本工具分别
-记录：
-
-- 本地 `HandJointCommand` publish Hz 和发送间隔 P95；
-- 当前 `client_id` 的驱动收到 Hz、SDK `ACCEPTED` Hz、实际 `DISPATCHED` Hz 和协议终态 Hz；
-- 发布到驱动接收、接收到 SDK 接受、接受到实际下发及发布到实际下发的 P50/P95/P99；
-- `HandCommandStatus.transitions[]` 中的 FAILED 和 SUPERSEDED；
-- SDK diagnostics 中 `completed_reads` 计算的完整读取事务 Hz；
-- SDK diagnostics 中角度 `command_feedback_samples`、`feedback_samples` 与
-  `feedback_policy`，用于区分命令反馈和真正计入反馈频率的样本；
-- ROS 状态消息 `meta.sequence` 增量计算的 SDK 缓存更新 Hz；
-- 实际收到的有效 ROS 状态消息计算的 ROS publish Hz；
-- 起止 `/diagnostics` 中 generation、pending、timeout、route miss 和 bus error 增量。
-
-这三个状态频率不能互相替代。查询响应、设置回显和主动上报都可能增加 cache sequence，只有
-`completed_reads` 表示 polling plan 下完成的逻辑读取；一次完整多帧触觉事务只增加一次。
-ROS publish Hz 则单独反映状态发布和 DDS 接收链路。diagnostics 同时提供最新 `origin`，用于
-确认当前缓存来自查询响应、设备上报还是回显。命令阶段按
-`(client_id, user_sequence, stage)` 去重；最终状态为 `ACKNOWLEDGED` 时仍以完整历史中是否
-存在 `DISPATCHED` 为准。
+`frequency_benchmark` 对比“连续角度命令 + 角度反馈”和“连续角度命令 + 角度反馈 + 完整触觉”两种负载。默认保持首次有效 percent 姿态，但仍持续发送实机命令，不能视作只读测试。
 
 ## 测试前提
 
-- 驱动 active，verified capability 和当前 generation 的有效角度已收到。
-- 测试期间没有其他角度发布者或主动设备查询程序。
-- `command_rate_hz` 启动时不低于最高候选角度频率，并保留调度余量。
-- 总线 bitrate、终端电阻、设备 ID、急停和机械空间已单独验证。
-- 已按[安装](getting_started.md)或[更新](update.md)准备 Transport、Hand Python 和 ROS 的最新 `main`。
-
-启动示例：
+- 按[快速开始](quick_start.md)或[更新指南](update.md)准备依赖，确认驱动 active、身份已验证、当前代次角度有效。
+- 关闭其他目标发布者和主动查询程序，每只手使用独立通道。
+- 预先验证总线、终端电阻、设备 ID、急停和机械空间。
+- 启动时设置足够的 `command_rate_hz`，该静态参数不会由测试工具自动修改。
 
 ```bash
 ros2 launch linkerbot_hand_ros hand.launch.py \
@@ -59,9 +15,9 @@ ros2 launch linkerbot_hand_ros hand.launch.py \
   transport_json:='{"backend":"socketcan","channel":"can1"}'
 ```
 
-## 角度单独收发
+## 角度收发
 
-正式上限测试按每候选点 3 分钟、重复 3 次：
+每个候选点运行 180 秒，重复 3 次：
 
 ```bash
 ros2 run linkerbot_hand_ros frequency_benchmark \
@@ -70,43 +26,19 @@ ros2 run linkerbot_hand_ros frequency_benchmark \
   --duration 180 --repetitions 3
 ```
 
-工具会对每个候选点原子设置：
+工具原子设置 `angles_hz`、`angle_feedback`、`publish_rate_hz`、`diagnostic_rate_hz`，清零所有触觉字段频率，再设置 `force_hz`。默认 diagnostics 为 1 Hz；提高 `--diagnostic-hz` 会增加观测成本，比较结果时须记录。
 
-- `angles_hz=<候选频率>`
-- `angle_feedback=query_only`（或命令行显式选择的策略）
-- `force_hz=0`
-- `publish_rate_hz=<候选频率>`（无新 revision 时的 age/stale 复查频率）
-- `diagnostic_rate_hz=1`（可通过 `--diagnostic-hz` 调整）
+不提供 `--angle-values` 时，工具先用 `query_only + 100 Hz` 获取基准姿态，再切换候选配置；预读不计入计时窗口。显式目标或 `--no-configure-driver` 不执行此预读。
 
-不会修改静态 `command_rate_hz`，也不会重建连接。
+| 策略 | 负载与指标 |
+| --- | --- |
+| `query_only` | 主动查询，适合与相同“设置+查询”负载比较 |
+| `command_feedback_only` | 使用设备命令反馈，须支持 `returns_current_state` |
+| `adaptive` | 优先反馈，在反馈不足时补查询 |
 
-diagnostics 是运维观测面，不属于角度数据面。高频调用 `get_health()` 会构造完整计数器和
-延迟分位数，在 Python 驱动接近设备往返上限时会与 I/O actor 竞争 GIL；频率上限测试默认
-保持 1 Hz。短时调试若提高 `--diagnostic-hz`，结果必须同时记录该配置，不能与 1 Hz 基线
-直接比较。
+三种策略的总线工作量不同，分别测试，不把结果混为同一上限。
 
-未显式提供 `--angle-values` 时，工具会先临时配置 `query_only + 100 Hz`，读取一次当前姿态
-作为安全基准，再切换到待测策略和频率。该预读发生在计时窗口之外，不计入结果；显式传入
-`--angle-values` 或使用 `--no-configure-driver` 时不会执行这一步。
-
-三种策略应分别测试，不能把结果混为同一负载：
-
-```bash
-ros2 run linkerbot_hand_ros frequency_benchmark --angle-feedback query_only \
-  --angle-rates 100 200 300
-ros2 run linkerbot_hand_ros frequency_benchmark --angle-feedback command_feedback_only \
-  --angle-rates 100 200 300
-ros2 run linkerbot_hand_ros frequency_benchmark --angle-feedback adaptive \
-  --angle-rates 100 200 300
-```
-
-`query_only` 每个周期包含主动查询，适合与 raw SocketCAN“设置+查询”对比；
-`command_feedback_only` 使用设置后的当前角度回显，CAN 事务量约为前者的一半；`adaptive`
-衡量实际生产调度，在回显不足时才补查询。
-
-## 角度 + 完整触觉
-
-O6/L6 capability 确认支持完整触觉后，固定触觉频率并搜索角度上限：
+## 角度与完整触觉
 
 ```bash
 ros2 run linkerbot_hand_ros frequency_benchmark \
@@ -115,81 +47,50 @@ ros2 run linkerbot_hand_ros frequency_benchmark \
   --duration 180 --repetitions 3
 ```
 
-这里 `30 Hz` 指 30 个完整多指样本：矩阵为 `HandTactileState`，O30 descriptor 为
-`HandTactileSensorState`，不是单指、字段或 CAN frame 的数量。若 firmware、
-传感器或 capability 的事务成本无法支持，polling plan 可能在参数更新时明确拒绝，或运行时
-以 timeout/missed deadline 失败；不得通过提高 ROS publish rate 掩盖。
+30 Hz 指每秒 30 个完整多指样本，不是手指、字段或 CAN 分片数。工具按 `payload_projection` 选择矩阵或 descriptor；缺少身份、字段不全的样本不算有效完整采样。明确缺失的传感器允许保留身份与空数据。
 
-## 可选小幅扰动
+L20Lite 的 `force_hz` 同时请求 fn 与 fns 两个独立事务，但触觉通过率统计点阵。仅测试点阵时，手动配置 `force_fn_hz` 并使用 `--no-configure-driver`。O30 的 FnS 合力另计为 `resultant_cache/resultant_ros`；没有 FnS 的 descriptor 仍可测试触觉频率，不会生成合力样本。
 
-只有确认方向、速度、限制和机械空间后才能启用。以下以当前姿态为中心，索引 2 扰动 3 个
-percent 点：
+预热应覆盖首次完整触觉读取；能力查询与缓存后的采集成本不同。单位、真实受压响应和机械到位不由频率工具证明。事务成本超出设备或总线能力时，参数校验可能拒绝，运行时也可能超时；提高 ROS 发布频率不能弥补。
+
+## 可选目标与扰动
+
+确认方向、速度、限制和空间后才启用扰动；下例对索引 2 施加 3 个 percent 点幅度：
 
 ```bash
 ros2 run linkerbot_hand_ros frequency_benchmark \
-  --angle-rates 50 100 \
-  --angle-amplitude 3 --joint-index 2 --angle-period 2 \
+  --angle-rates 50 100 --angle-amplitude 3 --joint-index 2 --angle-period 2 \
   --duration 180 --repetitions 3
 ```
 
-也可显式给基准目标，数量必须等于 capability 关节数：
+可用 `--angle-values 50 50 50 50 50 50` 指定六关节基准目标；数量须匹配设备。固定外部参数时使用 `--no-configure-driver --angle-rates 100`，调用方负责设置足够的轮询、发布和诊断频率。
 
-```bash
-ros2 run linkerbot_hand_ros frequency_benchmark \
-  --angle-values 50 50 50 50 50 50 \
-  --angle-rates 50 100
-```
+## 指标与通过标准
 
-## 单轮通过标准
+`ros2 topic hz` 只观察 ROS 接收，不能替代设备采样与命令下发计数。工具分别记录：
 
-默认 `minimum_ratio=0.9`。每轮同时满足：
+- 本地发布、驱动接收、SDK `ACCEPTED`、实际 `DISPATCHED` 和协议终态频率。
+- 发布→接收、接收→接受、接受→下发、发布→下发的 P50/P95/P99 延迟；发布间隔 P95。
+- 完整查询 `completed_reads`、命令反馈、策略有效反馈、SDK 缓存序号更新及有效 ROS 接收频率。
+- FAILED、SUPERSEDED、连接代次、pending、timeout、drop、route miss 和 bus error 增量。
 
-- 本地命令 publish Hz 不低于候选角度频率的 90%。
-- 驱动收到命令 Hz 不低于 90%。
-- SDK `ACCEPTED` Hz 不低于 90%。
-- 命令协议终态 Hz 不低于 90%。
-- 完整阶段历史中实际进入 `DISPATCHED` 的命令 Hz 不低于 90%。
-- SDK 角度有效反馈 Hz、缓存更新 Hz 和 ROS publish Hz 分别不低于角度目标的 90%。
-- `query_only` 还要求主动查询完成 Hz 达标；`command_feedback_only` 还要求命令回显 Hz 达标；
-  `adaptive` 允许两者共同满足目标。
-- 启用触觉时，完整触觉读取完成 Hz、缓存更新 Hz 和 ROS publish Hz 分别不低于触觉目标的
-  90%。
-- 没有 FAILED 命令；SUPERSEDED 单独记录，并通过实际下发频率门槛约束。
-- 四段延迟时间戳没有缺失或倒序。
-- 测试期间 state 和 health 的 connection generation 不变。
-- drain 后 `pending_commands=0`。
-- consecutive error、角度/force timeout、transport drop/route miss/bus error 无增加。
+命令按 `(client_id, user_sequence, stage)` 去重；即使最终状态是 ACK，也从 `transitions[]` 确认实际 DISPATCHED。状态按 generation 与 sequence 区分新样本，查询、反馈和上报不能互相替代；`origin` 表明当前来源。
 
-某候选频率只有连续 3 轮全通过才算稳定。候选集中最高稳定值是本次测试上限。默认首个失败
-后停止；需要观察更高点时：
+默认 `minimum_ratio=0.9`。每轮要求各命令阶段及角度有效反馈/缓存/ROS 频率达到目标的 90%；query_only 还须查询完成率达标，command_feedback_only 还须命令反馈率达标，adaptive 可组合两者。触觉的完整读取/缓存/ROS 频率也须分别达标。
 
-```bash
-ros2 run linkerbot_hand_ros frequency_benchmark \
-  --angle-rates 50 100 150 200 --continue-after-failure
-```
+同时要求无 FAILED、无缺失或倒序延迟时间戳、连接代次不变、drain 后 `pending_commands=0`，且连续错误、角度/触觉 timeout、transport drop/route miss/bus error 不增加。SUPERSEDED 单独记录，并受实际下发频率门槛约束。
 
-连接断开或 generation 改变会安全中止，恢复后必须重新确认 baseline 并重新运行。
-
-## 不自动改驱动参数
-
-外部系统固定 polling plan 时可使用：
-
-```bash
-ros2 run linkerbot_hand_ros frequency_benchmark \
-  --no-configure-driver --angle-rates 100
-```
-
-此时调用方负责保证 `angles_hz`、`force_hz`、`publish_rate_hz` 和 diagnostics 足以满足目标；
-工具仍按消息 sequence 和 health 判据验收。
+候选点连续三轮全通过才算稳定。默认首个失败后停止；`--continue-after-failure` 可继续测试更高点。连接断开或代次变化会中止，重新建立基线后再测试。
 
 ## 退出码与记录
 
-- `0`：全部候选点的全部轮次通过。
-- `2`：正常完成，但至少一个候选点失败。
-- `1`：启动、参数、状态或 capability 不满足。
-- `130`：用户中断。
+| 退出码 | 含义 |
+| --- | --- |
+| `0` | 全部候选点和轮次通过 |
+| `2` | 正常完成但存在失败点 |
+| `1` | 启动、参数、状态或能力不满足 |
+| `130` | 用户中断 |
 
-每轮同时保存驱动日志、`/diagnostics`、CPU/RSS、线程/FD 数量和
-`ip -details -statistics link show canX`。跨 SocketCAN raw、Python SDK 和 ROS 的对比必须
-使用相同请求、回复校验、目标更新和测试时长；本 ROS 工具的结果不能与不同工作量的 raw
-脚本直接相除。
+记录驱动日志、`/diagnostics`、CPU/RSS、线程/FD 和 `ip -details -statistics link show canX`。与 raw SocketCAN 或 Python SDK 比较时，使用相同请求、回复校验、目标更新与时长。
+
+[返回总览](getting_started.md) · [English](../frequency_benchmark.md)

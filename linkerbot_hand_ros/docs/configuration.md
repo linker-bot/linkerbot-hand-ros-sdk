@@ -1,7 +1,5 @@
 # Lifecycle and parameters
 
-[简体中文](zh/configuration.md) · [Manual](../README.md)
-
 ## Lifecycle
 
 - configure validates parameters and constructs the device/ROS entities, without opening or querying hardware.
@@ -111,7 +109,7 @@ enabling or calibrating. After generation changes, applications revalidate feedb
 
 ## Transport JSON
 
-See [connection examples](connection.md). Every object requires `backend`; unknown keys, wrong types
+See [connection examples](manual_connection.md). Every object requires `backend`; unknown keys, wrong types
 and missing required fields fail validation.
 
 | Backend | Required fields | Optional fields |
@@ -160,3 +158,5 @@ ros2 launch linkerbot_hand_ros multi_hand.launch.py config:=/absolute/path/hands
 `device_namespaces` must be nonempty/unique and have matching node parameter sections.
 `autostart` defaults true; false allows individual lifecycle management. Separate channels use separate runtimes.
 [Discovery deployments](discovery.md) add scanning and identity constraints using a different YAML schema.
+
+[Back to overview](getting_started.md) · [简体中文](zh/configuration.md)

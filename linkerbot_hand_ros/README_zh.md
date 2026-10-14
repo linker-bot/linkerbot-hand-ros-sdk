@@ -8,11 +8,13 @@
 
 ## 快速开始
 
-[安装与首组角度](docs/zh/getting_started.md)：选择 Humble 或 Jazzy 环境、安装源码、构建并读取设备状态。
+[网站使用手册总览](docs/zh/getting_started.md)
+
+[安装与首组角度](docs/zh/quick_start.md)：选择 Humble 或 Jazzy 环境、安装源码、构建并读取设备状态。
 
 ## 连接设备
 
-- [准备接口与手工连接](docs/zh/connection.md)：SocketCAN、MiniCANFD、型号和左右手。
+- [准备通信接口](docs/zh/connection.md)，再[手动连接](docs/zh/manual_connection.md)：SocketCAN、MiniCANFD、型号和左右手。
 - [自动发现与多手部署](docs/zh/discovery.md)：连接单手、多手及保存现场配置。
 - [适配器配置示例](docs/zh/discovery_examples.md)：PCAN、SLCAN、MiniCANFD 及固定部署模板。
 
@@ -21,7 +23,7 @@
 - [七种型号的 ROS 用法](docs/zh/models.md)：关节数、速度/加速度、电流/转矩、特殊操作。
 - [命令与 Python 示例](docs/zh/examples.md)：发送目标、读取配置、接入常驻客户端。
 - [触觉字段](docs/zh/force.md)：点阵、法向/切向字段、接近数据及轮询。
-- [O6 图形界面](../linkerbot_hand_gui/README.md)：URDF 预览和显式启用的实机控制。
+- [O6 图形界面](docs/zh/gui.md)：URDF 预览和显式启用的实机控制。
 
 ## ROS 参考与集成
 

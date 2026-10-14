@@ -15,7 +15,7 @@ Use ROS 2 Humble on Ubuntu 22.04 or Jazzy on Ubuntu 24.04, with the latest `main
 of Transport, Hand Python and this repository. Use the matching system Python
 and a separate workspace for each ROS distribution.
 
-1. [Install and build](linkerbot_hand_ros/docs/getting_started.md).
+1. [Install and build](linkerbot_hand_ros/docs/quick_start.md).
 2. [Prepare the adapter](linkerbot_hand_ros/docs/connection.md), then launch one hand:
 
    ```bash
@@ -25,7 +25,7 @@ and a separate workspace for each ROS distribution.
 3. In another configured terminal, read the first angle sample:
 
    ```bash
-   ros2 topic echo --once /linkerbot_hand/state/angles
+   ros2 topic echo --once --qos-reliability best_effort /linkerbot_hand/state/angles
    ```
 
 [User manual](linkerbot_hand_ros/README.md) ·

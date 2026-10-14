@@ -1,7 +1,5 @@
 # 自动发现并复用启动配置
 
-[English](../discovery.md) | [使用手册](../../README_zh.md)
-
 启动支持手工 launch、ROS 参数 YAML 和自动发现。发现模式通过 Hand SDK 读取身份、关闭探测
 连接，再用候选工厂构造节点。它不修改宿主 CAN 设置，不额外发送运动、使能、清错或
 标定命令。使用范围为一条物理 CAN/CAN FD 通道一只手。
@@ -121,6 +119,8 @@ PCAN（经典 CAN/CAN FD）、MiniCANFD、SLCAN（CAN FD）。库、权限、已
 热插拔替换或交互输入。本文 ROS 安装面向 Ubuntu 22.04/Humble 或 Ubuntu 24.04/Jazzy，SDK 支持 Windows 适配器不代表 Windows ROS 已验证。
 
 未显式设置 MiniCANFD 通道筛选时，Linux 自动探测 0，再按条件回退 1；
-详见[自动选择规则](connection.md#minicanfd)。固定模板会覆盖该自动范围。
+详见[自动选择规则](manual_connection.md#minicanfd)。固定模板会覆盖该自动范围。
 
 可复制的适配器设置和单手/双手部署见[配置示例](discovery_examples.md)；按后端、接口、端点和角色定位失败见[故障排查](discovery_troubleshooting.md)。
+
+[返回总览](getting_started.md) · [English](../discovery.md)

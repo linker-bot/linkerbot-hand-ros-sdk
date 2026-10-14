@@ -1,7 +1,5 @@
 # 故障排查
 
-[English](../troubleshooting.md) | [使用手册](../../README_zh.md)
-
 ## 自动发现与部署加载故障
 
 扫描无设备、多候选、库/权限、通道选择、配置文件和身份匹配错误见[发现与部署排障](discovery_troubleshooting.md)。
@@ -26,7 +24,7 @@ SDK 路径错误或更新后 ROSIDL 类型不一致，按[更新](update.md)重�
 
 ## DDS 崩溃或离线测试间歇超时
 
-在独立终端和空闲发现域运行离线测试，见[本地检查](../../../scripts/README.md)。
+在独立终端和空闲发现域运行离线测试，见[本地检查](https://gitea.linkerhub.work/linker-bot/linkerbot-hand-ros2/src/branch/main/scripts/README.md)。
 驱动 pytest 默认设置 `ROS_DOMAIN_ID=87`、`ROS_LOCALHOST_ONLY=1`，保留显式设置，
 测试前检查域内是否已有其他 ROS 节点。并行 worker 使用不同域号。
 这是测试发现域隔离措施，不能据此确定原生 DDS 崩溃的根因。
@@ -102,3 +100,5 @@ route miss 和 bus error，区分总线、设备与 ROS 接收问题。频率评
 恢复不重放目标，成功后等新代次有效反馈并显式提交新目标。
 关闭前停止业务和服务请求，再 deactivate、cleanup。若 close 超时或线程未退出，
 记录原始 cause、backend、线程/FD 状态并确认资源释放，避免同一接口重复打开。
+
+[返回总览](getting_started.md) · [English](../troubleshooting.md)

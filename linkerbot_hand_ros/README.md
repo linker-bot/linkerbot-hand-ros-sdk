@@ -8,12 +8,14 @@ polling and command scheduling. Applications use ROS interfaces without opening 
 
 ## Quick start
 
-[Install and read the first angles](docs/getting_started.md): choose Humble or Jazzy, install sources,
+[Website manual overview](docs/getting_started.md)
+
+[Install and read the first angles](docs/quick_start.md): choose Humble or Jazzy, install sources,
 build the packages and read device state.
 
 ## Connect a hand
 
-- [Prepare interfaces and connect manually](docs/connection.md): SocketCAN, MiniCANFD, model and side.
+- [Prepare interfaces](docs/connection.md), then [connect manually](docs/manual_connection.md): SocketCAN, MiniCANFD, model and side.
 - [Automatic discovery and multi-hand deployment](docs/discovery.md): connect, save and reuse device bindings.
 - [Adapter examples](docs/discovery_examples.md): PCAN, SLCAN, MiniCANFD and fixed deployment templates.
 
@@ -22,7 +24,7 @@ build the packages and read device state.
 - [Seven-model ROS guide](docs/models.md): joint counts, speed/acceleration, current/torque and special operations.
 - [Commands and Python examples](docs/examples.md): publish targets, read settings and use a persistent client.
 - [Tactile fields](docs/force.md): matrices, normal/tangential fields, proximity and polling.
-- [O6 GUI](../linkerbot_hand_gui/README.md) (Chinese): URDF preview and explicitly enabled hardware control.
+- [O6 GUI](docs/gui.md): URDF preview and explicitly enabled hardware control.
 
 ## ROS reference and integration
 
@@ -30,7 +32,7 @@ build the packages and read device state.
 - [Lifecycle and parameters](docs/configuration.md): defaults, live rates, timeouts and recovery.
 - [Application integration](docs/business_integration.md): readiness, feedback, arrival and cleanup.
 - [Client waits](docs/client_waits.md): synchronous/asynchronous waits and executor requirements.
-- [Frequency benchmark](docs/zh/frequency_benchmark.md) (Chinese): distinguish dispatch, sampling and publication rates.
+- [Frequency benchmark](docs/frequency_benchmark.md): distinguish dispatch, sampling and publication rates.
 
 ## Maintenance
 

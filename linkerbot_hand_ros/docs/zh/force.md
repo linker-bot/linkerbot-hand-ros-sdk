@@ -1,9 +1,8 @@
-# 统一触觉字段
+# 触觉数据
 
-[English](../force.md) · [使用手册](../../README_zh.md)
+触觉状态由 SDK 采集，ROS 提供具名字段、点阵和 descriptor 视图。消息包、驱动和订阅方使用一致接口定义构建。
 
-本指南描述最新 Hand SDK 和 ROS `main` 的统一触觉接口。能力消息 schema 为 `1.5`；
-消息包、ROS 驱动和订阅方使用一致的接口定义构建。
+## 字段与支持性
 
 每个字段发布到 `~/state/force_<字段>`，类型为 `HandForceField`。
 例如 `/linkerbot_hand/state/force_fn` 和 `/linkerbot_hand/state/force_fns`。
@@ -26,6 +25,8 @@ O30 不会仅凭协议名称声明所有字段已安装。查询 descriptor 前
 `HandCommandClient.force_field_capability("fn")` 获取缓存能力副本。
 其中 `firmware_unsupported` 表示本次连接检测到该查询不支持；重新连接会重新探测。
 
+## 数值与元数据
+
 `HandForceField.sensors` 保留手指顺序，每个元素包含：
 
 - `sensor_name`、`present`：身份及此手指是否提供该字段。缺失时 raw 为空，不补零。
@@ -38,6 +39,8 @@ O30 不会仅凭协议名称声明所有字段已安装。查询 descriptor 前
 带 FnS 的布局可同时取得 fn/fns，TASHAN_GATHER 则返回 fn/ft/fd/px。
 矩阵行列及 descriptor 详细布局仍分别从 `state/tactile`、
 `state/tactile_sensors` 取得，不能只凭数组长度猜测二维形状。
+
+## 点阵与 descriptor
 
 `HandTactileSensor` 保留最大行列、请求行列、`selected_sensor`、`available`、位置模式和矩形填充信息。
 这些尺寸不决定 descriptor 数组的形状或顺序；使用 `descriptor`、`fields` 和 `raw_bytes` 解读。
@@ -98,3 +101,5 @@ force_px_hz=5` 时也只产生最高 20 Hz 的同一查询，而非 50 Hz；返�
 点阵缓存或修改其采集时间；有效性/过期状态变化可能发布同一序号，统计采样率需按 generation
 和 sequence 去重。`state/force` 对应 `raw_vector` 投影，当前没有型号声明该投影；
 它不是具名字段的聚合话题。
+
+[返回总览](getting_started.md) · [English](../force.md)

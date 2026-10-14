@@ -1,7 +1,5 @@
 # Automatic discovery and reusable deployment
 
-English | [简体中文](zh/discovery.md) | [Manual](../README.md)
-
 Use manual launch, ROS parameter YAML or automatic discovery. Discovery reads
 identity through the source Hand SDK, closes probes, then constructs each driver
 through its candidate factory. It does not change host CAN settings or send extra
@@ -137,6 +135,8 @@ or interactive prompt is provided. The documented ROS installation targets Ubunt
 does not establish a validated Windows ROS deployment.
 
 Without explicit MiniCANFD channel filters, Linux probes channel 0 then conditionally channel 1;
-see [automatic selection rules](connection.md#minicanfd). Fixed templates deliberately override this scope.
+see [automatic selection rules](manual_connection.md#minicanfd). Fixed templates deliberately override this scope.
 
 Configuration templates and fixed deployments: [examples](discovery_examples.md). Locate failures by backend/interface/endpoint/role using [discovery troubleshooting](discovery_troubleshooting.md).
+
+[Back to overview](getting_started.md) · [简体中文](zh/discovery.md)

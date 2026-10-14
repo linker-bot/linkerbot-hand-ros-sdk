@@ -1,7 +1,5 @@
 # Troubleshooting
 
-English | [简体中文](zh/troubleshooting.md) | [Manual](../README.md)
-
 ## Discovery and saved deployments
 
 See [discovery troubleshooting](discovery_troubleshooting.md) for missing/ambiguous
@@ -28,7 +26,7 @@ for missing packages and [updates](update.md) for incorrect SDK paths or inconsi
 ## DDS crashes or intermittent offline test timeouts
 
 Run offline tests in a separate terminal and an unused discovery domain; see
-[local checks](../../scripts/README.md). Driver pytest defaults to `ROS_DOMAIN_ID=87`
+[local checks](https://gitea.linkerhub.work/linker-bot/linkerbot-hand-ros2/src/branch/main/scripts/README.md). Driver pytest defaults to `ROS_DOMAIN_ID=87`
 and `ROS_LOCALHOST_ONLY=1`, preserves explicit settings, and checks for other ROS
 nodes before testing. Parallel workers need separate domains. This isolates test
 discovery; it does not establish the cause of a native DDS crash.
@@ -82,8 +80,7 @@ a positive value controls idle validity checks while new cache revisions wake pu
 immediately. A validity change with the same sequence is not a new device sample.
 
 Inspect requested/achieved rates, completed reads, feedback samples, timeouts, age,
-route misses and bus errors in diagnostics. The [benchmark guide](zh/frequency_benchmark.md)
-(Chinese) distinguishes transport, device and ROS rates.
+route misses and bus errors in diagnostics. The [benchmark guide](frequency_benchmark.md) distinguishes transport, device and ROS rates.
 
 ## Missing query, service or angle representation
 
@@ -116,3 +113,5 @@ Recovery does not replay targets. Wait for valid new-generation feedback and sub
 new target explicitly. Stop application and service producers before deactivate/cleanup.
 For close timeouts or surviving threads, retain the cause, backend and thread/FD evidence,
 and confirm release before reopening the same physical interface.
+
+[Back to overview](getting_started.md) · [简体中文](zh/troubleshooting.md)

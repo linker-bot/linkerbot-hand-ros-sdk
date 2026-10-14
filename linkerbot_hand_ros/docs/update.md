@@ -1,12 +1,10 @@
 # Update SDK and ROS
 
-[简体中文](zh/update.md) · [Manual](../README.md)
-
 Stop target publishers, deactivate/cleanup drivers and exit their processes before updating.
 Keep local changes; if switching or fast-forwarding fails, resolve the branch state before continuing.
 Do not reset a working tree to bypass the error.
 
-Choose the distribution matching your OS using the [installation guide](getting_started.md#1-choose-a-ros-distribution-and-prepare-the-environment).
+Choose the distribution matching your OS using the [installation guide](quick_start.md#1-choose-a-ros-distribution-and-prepare-the-environment).
 The commands below use separate venvs and workspaces per distribution; adjust paths for existing installations.
 Use a separate workspace when changing ROS distributions; generated build/install artifacts cannot be shared.
 
@@ -57,11 +55,11 @@ ros2 interface show linkerbot_hand_msgs/msg/HandJointCommand
 
 Confirm dependency checks pass, all three packages resolve to this workspace, and
 the GUI executable list includes `o6_gui_bridge`. GUI users should also verify their
-external `linker-sim-assets` checkout; follow [asset setup](../../linkerbot_hand_gui/README.md#准备模型资源)
+external `linker-sim-assets` checkout; follow [asset setup](gui.md)
 for missing or incomplete Git LFS files. Rebuilding ROS does not download or update
 that asset repository.
 
-Open fresh terminals and [load the environment](getting_started.md#4-load-each-terminal).
+Open fresh terminals and [load the environment](quick_start.md#4-load-each-terminal).
 Rediscover devices and verify their capabilities and current state before sending targets.
 If generated ROS interfaces are inconsistent, remove only the affected build/install outputs
 and rebuild the message package and its consumers together.
@@ -73,3 +71,5 @@ git -C ~/linkerbot_deps/linkerbot-transport rev-parse HEAD
 git -C ~/linkerbot_deps/linkerbot-hand rev-parse HEAD
 git -C "$HOME/linkerbot_${ROS_DISTRO}_ws/src/linkerbot-hand-ros" rev-parse HEAD
 ```
+
+[Back to overview](getting_started.md) · [简体中文](zh/update.md)

@@ -1,131 +1,48 @@
-# 安装与首组角度
+# 灵巧手 ROS 2 使用手册
 
-[English](../getting_started.md) · [使用手册](../../README_zh.md)
+`linkerbot_hand_ros` 将 LinkerHand 灵巧手接入 ROS 2，提供设备发现、角度控制、状态与触觉读取，以及管理服务。支持 L6、O6、L20Lite、L20、O20、L30 和 O30。
 
-## 1. 选择 ROS 发行版并准备环境
+> [!TIP]
+> 首次使用时，请从快速开始完成安装与状态读取，再查看对应型号的功能。
 
-按操作系统选择一项；同一份最新 `main` 源码支持这两种发行版：
+## 快速开始
 
-- Ubuntu 22.04 / Python 3.10：使用 **ROS 2 Humble**，按 [Humble 安装指南](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)配置 apt 软件源，然后执行 `export LINKERBOT_ROS_DISTRO=humble`。
-- Ubuntu 24.04 / Python 3.12：使用 **ROS 2 Jazzy**，按 [Jazzy 安装指南](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)配置 apt 软件源，然后执行 `export LINKERBOT_ROS_DISTRO=jazzy`。
+[快速开始](quick_start.md)：安装 Python 依赖与 ROS 包，连接一只手并读取首组角度。Ubuntu 22.04 使用 ROS 2 Humble，Ubuntu 24.04 使用 Jazzy。
 
-新部署使用与系统匹配的发行版；不要跨 Ubuntu 版本安装 ROS 二进制包。
-使用系统 Python，虚拟环境通过 `--system-site-packages` 读取同一发行版的 ROS 包。
-以下命令复用上方选择；每个发行版使用独立 venv 和工作空间。
+## 连接设备
 
-```bash
-sudo apt update
-sudo apt install -y git can-utils python3-venv python3-rosdep \
-  python3-colcon-common-extensions python3-setuptools python3-wheel \
-  "ros-${LINKERBOT_ROS_DISTRO}-ros-base"
-if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
-  sudo rosdep init
-fi
-rosdep update --rosdistro "${LINKERBOT_ROS_DISTRO}"
-source "/opt/ros/${LINKERBOT_ROS_DISTRO}/setup.bash"
-/usr/bin/python3 -m venv --system-site-packages "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}"
-source "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}/bin/activate"
-python -m pip install --upgrade pip
-```
+先[准备通信接口](connection.md)，再选择连接方式：
 
-colcon 复用 Ubuntu 提供的 setuptools/wheel，不要用 pip 升级这个构建环境中的 setuptools。
+- [手动连接](manual_connection.md)：明确型号、侧别和适配器参数。
+- [自动连接](discovery.md)：自动识别单手、多手，并保存可复用的部署配置。
 
-## 2. 安装最新 main 源码
+## 设备功能
 
-克隆需要 Gitea 访问权限。先安装 Transport 和 Hand Python，再一起构建 ROS 消息包、驱动和 GUI。
-已有源码目录请按[更新指南](update.md)操作。
+各型号均提供身份与能力信息、角度、速度设置、电流与温度等状态；实际端点以当前设备的 `capabilities` 为准。
 
-```bash
-mkdir -p ~/linkerbot_deps
-cd ~/linkerbot_deps
-git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/linker-bot/linkerbot-transport.git linkerbot-transport
-git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/linker-bot/linkerbot-hand-python.git linkerbot-hand
-python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
+| 型号 | 功能 |
+| --- | --- |
+| [L6](l6.md) | 角度、速度、力矩模式、控制增益、限位补偿、触觉 |
+| [O6](o6.md) | 角度、速度、加速度、触觉、O6 图形界面 |
+| [L20Lite](l20lite.md) | 角度、速度、加速度、触觉点阵及合力/方向/接近值 |
+| [L20](l20.md) | 角度、速度、触觉、故障清除 |
+| [O20](o20.md) | 角度、速度、配置回读、触觉、故障清除 |
+| [L30](l30.md) | 角度、速度、触觉、使能/失能、标定 |
+| [O30](o30.md) | 角度、速度、加速度、力矩限幅、运动时间、descriptor 触觉 |
 
-mkdir -p "$HOME/linkerbot_${ROS_DISTRO}_ws/src"
-cd "$HOME/linkerbot_${ROS_DISTRO}_ws/src"
-git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/linker-bot/linkerbot-hand-ros2.git linkerbot-hand-ros
-```
+[型号差异](models.md)说明配置回读、单位和传感器差异。
 
-本地 `linkerbot-hand` 目录对应 `linkerbot-hand-python` 仓库，Python 包名仍为 `linkerbot-hand`。
+## 开发集成
 
-## 3. 构建并验证
+- [控制与 Python 示例](examples.md)：读状态、发目标、复用 `HandCommandClient`。
+- [业务节点集成](business_integration.md)：就绪判断、命令状态、到位判定和恢复。
+- [ROS 2 API](ros_api.md)：话题、服务、QoS 和错误语义。
+- [消息字段](messages.md)、[触觉数据](force.md)、[生命周期与参数](configuration.md)：按需查阅。
 
-在已加载 ROS 和 venv 的终端构建。rosdep 根据三个包的声明安装系统依赖，
-包括 GUI 使用的 RViz、Joint State Publisher GUI 和 Robot State Publisher。
-URDF 和 mesh 不由 rosdep 安装，按下方 GUI 资源步骤单独准备。
+## 补充说明
 
-```bash
-cd "$HOME/linkerbot_${ROS_DISTRO}_ws"
-rosdep install --from-paths src --ignore-src -y --rosdistro "${ROS_DISTRO}"
-rosdep check --from-paths src --ignore-src --rosdistro "${ROS_DISTRO}"
-python -m colcon build --symlink-install \
-  --cmake-args -DPython3_EXECUTABLE="$(command -v python)"
-source "$HOME/linkerbot_${ROS_DISTRO}_ws/install/setup.bash"
-python -c 'import linkerbot_transport, linkerbot_hand; print("Python dependencies: OK")'
-ros2 pkg prefix linkerbot_hand_msgs
-ros2 pkg prefix linkerbot_hand_ros
-ros2 pkg prefix linkerbot_hand_gui
-ros2 pkg executables linkerbot_hand_gui
-ros2 interface show linkerbot_hand_msgs/msg/HandJointCommand
-```
+- [故障排查](troubleshooting.md)：定位安装、连接、状态和控制问题。
+- [更新 SDK 与 ROS](update.md)：更新源码、重建消息和驱动。
+- [频率测试](frequency_benchmark.md)：区分命令发送、设备采样和 ROS 接收频率。
 
-确认 rosdep 检查成功，三个 `ros2 pkg prefix` 均指向当前工作空间；GUI 可执行文件列表
-应包含 `linkerbot_hand_gui o6_gui_bridge`，消息定义应正常显示。以上检查不连接设备或打开图形窗口。
-rosdep 的实际错误必须处理，单独的 `pkg_resources` 弃用警告不代表失败。
-构建命令显式指定当前 Python，避免 CMake 选择与 ROS ABI 不匹配的解释器。
-
-## 4. 每个终端加载环境
-
-每个新终端先执行所选发行版的 `export LINKERBOT_ROS_DISTRO=humble` 或
-`export LINKERBOT_ROS_DISTRO=jazzy`，再加载以下环境。一个终端只加载一个 ROS 发行版。
-
-```bash
-source "/opt/ros/${LINKERBOT_ROS_DISTRO}/setup.bash"
-source "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}/bin/activate"
-source "$HOME/linkerbot_${ROS_DISTRO}_ws/install/setup.bash"
-```
-
-### 可选：准备 O6 GUI 资源
-
-需要 O6 可视化时，按 [GUI 资源准备](../../../linkerbot_hand_gui/README.md#准备模型资源)
-安装 Git LFS 并下载 `linker-sim-assets`，再按[仅预览](../../../linkerbot_hand_gui/README.md#仅预览)
-验证模型显示；预览需要桌面图形环境，无需连接设备。GUI 包构建成功不代表模型资源已下载。
-驱动通信和命令行使用无需这些模型资源。
-
-## 5. 连接一只手
-
-先[准备通信接口](connection.md)，给设备上电，在扫描范围内仅连接一只手，然后启动：
-
-```bash
-ros2 launch linkerbot_hand_ros hand.launch.py discover:=true
-```
-
-限定接口可追加 `channels:=can0`。未找到、找到多个或身份不完整时会报错；
-多手及厂商适配器见[自动发现](discovery.md)。发现和激活会读取身份与状态，不发送运动目标。
-
-在另一个终端加载相同环境，读取：
-
-```bash
-ros2 lifecycle get /linkerbot_hand
-ros2 topic echo --once /linkerbot_hand/capabilities
-ros2 topic echo --once /linkerbot_hand/state/angles
-```
-
-应看到 `active`、`identity.verified=true`，以及角度 `meta.valid=true`、`stale=false`。
-`joint_names` 给出数组顺序；raw、percent 和物理弧度分别有有效性标记。
-
-## 6. 结束或继续
-
-先停止业务节点发送目标，再释放驱动连接：
-
-```bash
-ros2 lifecycle set /linkerbot_hand deactivate
-ros2 lifecycle set /linkerbot_hand cleanup
-```
-
-最后在 launch 终端按 Ctrl+C。deactivate 只停止命令与轮询，cleanup 才关闭连接。
-接下来查看[型号功能](models.md)、[控制示例](examples.md)或 [O6 GUI](../../../linkerbot_hand_gui/README.md)。
+[English](../getting_started.md)

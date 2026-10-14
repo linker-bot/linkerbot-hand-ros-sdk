@@ -1,6 +1,8 @@
-# Waiting for a ROS hand client
+# Client waiting
 
-English | [简体中文](zh/client_waits.md) | [Manual](../README.md)
+Waits establish driver readiness and observe protocol command results. The owning node must keep spinning.
+
+## Readiness conditions
 
 Readiness requires verified capability metadata, a fresh `get_state` response
 reporting **active** from the specified driver, and that driver's command
@@ -16,6 +18,8 @@ still validates lifecycle and device state when admitting each command.
 `HandCommandClient` has its own callback group for metadata, command status and
 wait timeouts. The node still needs to be spinning.
 
+## Choose by caller context
+
 | Caller | Supported waiting pattern |
 | --- | --- |
 | Async ROS callback, including SingleThreadedExecutor | `await wait_until_ready_async(...)`, `await wait_for_terminal_status_async(...)` |
@@ -28,6 +32,8 @@ call `spin_until_future_complete` or nest executor spinning inside a callback.
 Synchronous waiting inside a SingleThreadedExecutor callback prevents message
 delivery until the wait times out. Even with multiple threads, blocking all
 workers has the same effect.
+
+## Async waiting example
 
 For an occasional command from an async callback:
 
@@ -48,6 +54,8 @@ target and inspect `get_status` on subsequent ticks. Awaiting inside a mutually
 exclusive callback still occupies that callback group, although it releases
 the executor thread. Client reception is isolated from that group.
 
+## Timeouts and destruction
+
 Timeouts use elapsed wall time, including when ROS simulation time is paused.
 Cancelling a returned Future cancels only that wait. Destroy the client before
 destroying its node; pending waits then fail with `RuntimeError`. Neither a
@@ -55,3 +63,5 @@ timeout nor cancellation retracts a published command. A terminal SDK status
 describes protocol progress, not mechanical target arrival.
 
 Inspect the returned stage for failure or supersession; receiving a terminal status alone does not prove success.
+
+[Back to overview](getting_started.md) · [简体中文](zh/client_waits.md)

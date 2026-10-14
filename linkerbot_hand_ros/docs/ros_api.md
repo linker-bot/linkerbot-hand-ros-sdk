@@ -4,8 +4,6 @@ The driver exposes the latest Hand SDK `main` contract through typed interfaces.
 arrays always follow channel names published in `~/capabilities`; there is no
 ROS model table.
 
-[简体中文](zh/ros_api.md) · [Manual](../README.md)
-
 ## Lifecycle
 
 | Transition | Device behavior |
@@ -99,7 +97,7 @@ metadata and sampling rates are documented in [tactile fields](force.md).
 
 <a id="o30-tashan_gather-scalar-fields"></a>
 O30 TASHAN_GATHER exposes fn/ft/fd/px per-finger scalars; see the
-[layout and validity rules](force.md#o30-tashan_gather).
+[layout and validity rules](force.md#o30-tashangather).
 
 Device info and identity capabilities include adapter/control/bootloader versions,
 protocol name/version, supply range, MCU UID, build time, supported interfaces and
@@ -131,7 +129,7 @@ flags, raw byte, reserved bits and explanations. Only names in `supported_flags`
 have a defined meaning; other false values do not mean the device is healthy.
 L6 keeps MCU/motor temperatures, both overload flags and A/C/B phase currents
 separate. L20 keeps motor communication, self-test, soft lock, stall and rotor
-lock separate. See the [message field reference](../../linkerbot_hand_msgs/README.md).
+lock separate. See the [message field reference](messages.md).
 Build messages and all consumers from consistent `main` interface definitions.
 
 ## Services
@@ -253,3 +251,5 @@ SDK cache changes wake a dedicated publisher; the production ROS process uses a
 `MultiThreadedExecutor`. Capabilities are refreshed from SDK memory, without device queries.
 For control-loop readiness, status correlation and waiting rules, use
 [application integration](business_integration.md) and [client waits](client_waits.md).
+
+[Back to overview](getting_started.md) · [简体中文](zh/ros_api.md)
