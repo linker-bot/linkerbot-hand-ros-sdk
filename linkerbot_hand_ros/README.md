@@ -39,7 +39,7 @@ build the packages and read device state.
 - [Troubleshooting](docs/troubleshooting.md)
 - [Update SDK and ROS](docs/update.md)
 - [Local development checks](../DEVELOPMENT.md) (Chinese)
-- [Hand Python manual](https://gitea.linkerhub.work/linker-bot/linkerbot-hand-python/src/branch/main/docs/en/src/reference/README.md)
+- [Hand Python manual](https://github.com/linker-bot/linkerbot-hand-python-sdk/blob/main/docs/en/src/reference/README.md)
 
 Use the connected device's capabilities for joint order, ranges and interface support.
 Acceptance, dispatch, protocol acknowledgement and mechanical arrival are separate stages;

@@ -38,7 +38,7 @@
 - [故障排查](docs/zh/troubleshooting.md)
 - [更新 SDK 与 ROS](docs/zh/update.md)
 - [本地开发检查](../DEVELOPMENT.md)
-- [Hand Python 使用手册](https://gitea.linkerhub.work/linker-bot/linkerbot-hand-python/src/branch/main/docs/zh/src/reference/README.md)
+- [Hand Python 使用手册](https://github.com/linker-bot/linkerbot-hand-python-sdk/blob/main/docs/zh/src/reference/README.md)
 
 关节顺序、范围和接口支持性以已连接设备的 `capabilities` 为准。
 命令被接受、已发送、协议确认与机械到位是不同阶段；到位需检查当前连接代次的有效反馈。

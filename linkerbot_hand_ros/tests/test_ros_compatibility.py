@@ -290,11 +290,11 @@ def test_sdk_install_instructions_use_main_sources() -> None:
         commands = source.replace("\\\n", "")
         for repository, directory in (
             ("linkerbot-transport", "linkerbot-transport"),
-            ("linkerbot-hand-python", "linkerbot-hand"),
+            ("linkerbot-hand-python-sdk", "linkerbot-hand"),
         ):
             assert re.search(
                 rf"git clone --branch main --depth 1\s+"
-                rf"https://gitea\.linkerhub\.work/linker-bot/{repository}\.git\s+{directory}",
+                rf"https://github\.com/linker-bot/{repository}\.git\s+{directory}",
                 commands,
             ), path
             update_path = path.with_name("update.md")
@@ -303,7 +303,7 @@ def test_sdk_install_instructions_use_main_sources() -> None:
             )
             assert re.search(
                 rf"git -C ~/linkerbot_deps/{directory} remote set-url origin\s+"
-                rf"https://gitea\.linkerhub\.work/linker-bot/{repository}\.git",
+                rf"https://github\.com/linker-bot/{repository}\.git",
                 update_commands,
             ), update_path
         assert "-e './linkerbot-transport[all]' -e ./linkerbot-hand" in source

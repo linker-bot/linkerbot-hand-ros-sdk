@@ -23,7 +23,7 @@ setup(
     maintainer_email="1849346915@qq.com",
     description="O6 URDF slider preview and safe ROS 2 hand control bridge",
     license="Apache-2.0",
-    url="https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand-ros",
+    url="https://github.com/linker-bot/linkerbot-hand-ros-sdk",
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
