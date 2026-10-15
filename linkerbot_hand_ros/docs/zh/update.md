@@ -19,15 +19,15 @@ source "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}/bin/activate"
 
 ```bash
 git -C ~/linkerbot_deps/linkerbot-transport remote set-url origin \
-  https://gitea.linkerhub.work/linker-bot/linkerbot-transport.git
+  https://github.com/linker-bot/linkerbot-transport.git
 git -C ~/linkerbot_deps/linkerbot-transport switch main
 git -C ~/linkerbot_deps/linkerbot-transport pull --ff-only origin main
 git -C ~/linkerbot_deps/linkerbot-hand remote set-url origin \
-  https://gitea.linkerhub.work/linker-bot/linkerbot-hand-python.git
+  https://github.com/linker-bot/linkerbot-hand-python-sdk.git
 git -C ~/linkerbot_deps/linkerbot-hand switch main
 git -C ~/linkerbot_deps/linkerbot-hand pull --ff-only origin main
 git -C "$HOME/linkerbot_${ROS_DISTRO}_ws/src/linkerbot-hand-ros" remote set-url origin \
-  https://gitea.linkerhub.work/linker-bot/linkerbot-hand-ros2.git
+  https://github.com/linker-bot/linkerbot-hand-ros-sdk.git
 git -C "$HOME/linkerbot_${ROS_DISTRO}_ws/src/linkerbot-hand-ros" switch main
 git -C "$HOME/linkerbot_${ROS_DISTRO}_ws/src/linkerbot-hand-ros" pull --ff-only origin main
 python -m pip install -e "$HOME/linkerbot_deps/linkerbot-transport[all]" \

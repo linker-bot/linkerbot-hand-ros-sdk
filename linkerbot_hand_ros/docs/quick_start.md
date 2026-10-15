@@ -52,25 +52,25 @@ colcon reuses Ubuntu-provided setuptools/wheel. Do not upgrade setuptools with p
 
 ## 2. Install the latest main sources
 
-Gitea access is required. Install Transport before Hand Python, then build ROS messages,
+Clone the sources from GitHub. Install Transport before Hand Python, then build ROS messages,
 driver and GUI together. Existing checkouts use the [update guide](update.md).
 
 ```bash
 mkdir -p ~/linkerbot_deps
 cd ~/linkerbot_deps
 git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/linker-bot/linkerbot-transport.git linkerbot-transport
+  https://github.com/linker-bot/linkerbot-transport.git linkerbot-transport
 git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/linker-bot/linkerbot-hand-python.git linkerbot-hand
+  https://github.com/linker-bot/linkerbot-hand-python-sdk.git linkerbot-hand
 python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
 
 mkdir -p "$HOME/linkerbot_${ROS_DISTRO}_ws/src"
 cd "$HOME/linkerbot_${ROS_DISTRO}_ws/src"
 git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/linker-bot/linkerbot-hand-ros2.git linkerbot-hand-ros
+  https://github.com/linker-bot/linkerbot-hand-ros-sdk.git linkerbot-hand-ros
 ```
 
-The local directory `linkerbot-hand` contains the `linkerbot-hand-python` repository;
+The local directory `linkerbot-hand` contains the `linkerbot-hand-python-sdk` repository;
 its Python distribution is named `linkerbot-hand`.
 
 ## 3. Build and verify

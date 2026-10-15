@@ -49,25 +49,25 @@ colcon 复用 Ubuntu 提供的 setuptools/wheel，不要用 pip 升级这个构�
 
 ## 2. 安装最新 main 源码
 
-克隆需要 Gitea 访问权限。先安装 Transport 和 Hand Python，再一起构建 ROS 消息包、驱动和 GUI。
+从 GitHub 克隆源码。先安装 Transport 和 Hand Python，再一起构建 ROS 消息包、驱动和 GUI。
 已有源码目录请按[更新指南](update.md)操作。
 
 ```bash
 mkdir -p ~/linkerbot_deps
 cd ~/linkerbot_deps
 git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/linker-bot/linkerbot-transport.git linkerbot-transport
+  https://github.com/linker-bot/linkerbot-transport.git linkerbot-transport
 git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/linker-bot/linkerbot-hand-python.git linkerbot-hand
+  https://github.com/linker-bot/linkerbot-hand-python-sdk.git linkerbot-hand
 python -m pip install -e './linkerbot-transport[all]' -e ./linkerbot-hand
 
 mkdir -p "$HOME/linkerbot_${ROS_DISTRO}_ws/src"
 cd "$HOME/linkerbot_${ROS_DISTRO}_ws/src"
 git clone --branch main --depth 1 \
-  https://gitea.linkerhub.work/linker-bot/linkerbot-hand-ros2.git linkerbot-hand-ros
+  https://github.com/linker-bot/linkerbot-hand-ros-sdk.git linkerbot-hand-ros
 ```
 
-本地 `linkerbot-hand` 目录对应 `linkerbot-hand-python` 仓库，Python 包名仍为 `linkerbot-hand`。
+本地 `linkerbot-hand` 目录对应 `linkerbot-hand-python-sdk` 仓库，Python 包名仍为 `linkerbot-hand`。
 
 ## 3. 构建并验证
 

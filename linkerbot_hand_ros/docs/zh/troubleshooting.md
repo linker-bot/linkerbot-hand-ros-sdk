@@ -24,7 +24,7 @@ SDK 路径错误或更新后 ROSIDL 类型不一致，按[更新](update.md)重�
 
 ## DDS 崩溃或离线测试间歇超时
 
-在独立终端和空闲发现域运行离线测试，见[本地检查](https://gitea.linkerhub.work/linker-bot/linkerbot-hand-ros2/src/branch/main/DEVELOPMENT.md)。
+在独立终端和空闲发现域运行离线测试，见[本地检查](https://github.com/linker-bot/linkerbot-hand-ros-sdk/blob/main/DEVELOPMENT.md)。
 驱动 pytest 默认设置 `ROS_DOMAIN_ID=87`、`ROS_LOCALHOST_ONLY=1`，保留显式设置，
 测试前检查域内是否已有其他 ROS 节点。并行 worker 使用不同域号。
 这是测试发现域隔离措施，不能据此确定原生 DDS 崩溃的根因。
