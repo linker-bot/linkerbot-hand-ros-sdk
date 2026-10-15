@@ -2,10 +2,29 @@
 
 ## 1. 选择 ROS 发行版并准备环境
 
-按操作系统选择一项；同一份最新 `main` 源码支持这两种发行版：
+Humble 和 Jazzy 是 ROS 2 的两个发行版。本仓库的同一份 `main` 源码支持两者，
+无需切换 SDK 分支；连接、Topic、Service 和 Python 客户端的用法相同。
+按操作系统选择下面一项，再执行共用的安装与构建步骤。
 
-- Ubuntu 22.04 / Python 3.10：使用 **ROS 2 Humble**，按 [Humble 安装指南](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)配置 apt 软件源，然后执行 `export LINKERBOT_ROS_DISTRO=humble`。
-- Ubuntu 24.04 / Python 3.12：使用 **ROS 2 Jazzy**，按 [Jazzy 安装指南](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)配置 apt 软件源，然后执行 `export LINKERBOT_ROS_DISTRO=jazzy`。
+### Ubuntu 22.04：Humble
+
+使用系统 Python 3.10。先按 [Humble 安装指南](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)
+配置 apt 软件源，在当前终端选择：
+
+```bash
+export LINKERBOT_ROS_DISTRO=humble
+```
+
+### Ubuntu 24.04：Jazzy
+
+使用系统 Python 3.12。先按 [Jazzy 安装指南](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
+配置 apt 软件源，在当前终端选择：
+
+```bash
+export LINKERBOT_ROS_DISTRO=jazzy
+```
+
+### 共用安装步骤
 
 新部署使用与系统匹配的发行版；不要跨 Ubuntu 版本安装 ROS 二进制包。
 使用系统 Python，虚拟环境通过 `--system-site-packages` 读取同一发行版的 ROS 包。
@@ -78,14 +97,29 @@ rosdep 的实际错误必须处理，单独的 `pkg_resources` 弃用警告不�
 
 ## 4. 每个终端加载环境
 
-每个新终端先执行所选发行版的 `export LINKERBOT_ROS_DISTRO=humble` 或
-`export LINKERBOT_ROS_DISTRO=jazzy`，再加载以下环境。一个终端只加载一个 ROS 发行版。
+安装与构建完成后，每个新终端按对应发行版执行一组。
+
+**Humble（Ubuntu 22.04）**：
 
 ```bash
-source "/opt/ros/${LINKERBOT_ROS_DISTRO}/setup.bash"
-source "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}/bin/activate"
-source "$HOME/linkerbot_${ROS_DISTRO}_ws/install/setup.bash"
+export LINKERBOT_ROS_DISTRO=humble
+source /opt/ros/humble/setup.bash
+source ~/venvs/linkerbot-hand-humble/bin/activate
+source ~/linkerbot_humble_ws/install/setup.bash
 ```
+
+**Jazzy（Ubuntu 24.04）**：
+
+```bash
+export LINKERBOT_ROS_DISTRO=jazzy
+source /opt/ros/jazzy/setup.bash
+source ~/venvs/linkerbot-hand-jazzy/bin/activate
+source ~/linkerbot_jazzy_ws/install/setup.bash
+```
+
+可用 `echo "$ROS_DISTRO"` 和 `python --version` 核对：Humble 应为 `humble` / Python 3.10，
+Jazzy 应为 `jazzy` / Python 3.12。一个终端只加载一个发行版；切换时打开新终端，
+分别使用对应的 venv、工作空间和构建产物。两者加载后均按下一节启动驱动、读取状态。
 
 需要 O6 可视化时，另按 [O6 图形界面](gui.md)准备模型资源；命令行使用无需下载资源。
 

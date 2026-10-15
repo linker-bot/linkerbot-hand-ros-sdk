@@ -7,7 +7,12 @@
 
 ## 快速开始
 
-[快速开始](quick_start.md)：安装 Python 依赖与 ROS 包，连接一只手并读取首组角度。Ubuntu 22.04 使用 ROS 2 Humble，Ubuntu 24.04 使用 Jazzy。
+[快速开始](quick_start.md)：安装 Python 依赖与 ROS 包，连接一只手并读取首组角度。
+
+- Ubuntu 22.04 / Python 3.10：使用 [Humble](quick_start.md#ubuntu-2204humble)。
+- Ubuntu 24.04 / Python 3.12：使用 [Jazzy](quick_start.md#ubuntu-2404jazzy)。
+
+两者使用同一份 `main` 源码和 ROS 接口；分别安装、构建后，按[对应发行版加载环境](quick_start.md#4-每个终端加载环境)，再使用下方连接与功能文档。
 
 ## 连接设备
 

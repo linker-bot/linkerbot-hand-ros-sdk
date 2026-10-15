@@ -2,10 +2,32 @@
 
 ## 1. Choose a ROS distribution and prepare the environment
 
-Choose the option matching your OS. The same latest `main` sources support both:
+Humble and Jazzy are two ROS 2 distributions. The same `main` sources support both;
+there is no separate SDK branch to select. Connection, topics, services and the
+Python client use the same interfaces. Choose the option matching your OS, then
+follow the shared installation and build steps.
 
-- Ubuntu 22.04 / Python 3.10: use **ROS 2 Humble**, configure apt with the [Humble installation guide](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html), then run `export LINKERBOT_ROS_DISTRO=humble`.
-- Ubuntu 24.04 / Python 3.12: use **ROS 2 Jazzy**, configure apt with the [Jazzy installation guide](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html), then run `export LINKERBOT_ROS_DISTRO=jazzy`.
+### Ubuntu 22.04: Humble
+
+Use system Python 3.10. Configure apt with the
+[Humble installation guide](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html),
+then select the distribution in the current terminal:
+
+```bash
+export LINKERBOT_ROS_DISTRO=humble
+```
+
+### Ubuntu 24.04: Jazzy
+
+Use system Python 3.12. Configure apt with the
+[Jazzy installation guide](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html),
+then select the distribution in the current terminal:
+
+```bash
+export LINKERBOT_ROS_DISTRO=jazzy
+```
+
+### Shared installation
 
 Use the distribution matching the host OS; ROS binary packages must match the Ubuntu release.
 Use system Python and `--system-site-packages` to load that distribution's ROS packages.
@@ -81,14 +103,30 @@ CMake explicitly uses the active Python interpreter to match the ROS ABI.
 
 ## 4. Load each terminal
 
-In each fresh terminal, select `export LINKERBOT_ROS_DISTRO=humble` or
-`export LINKERBOT_ROS_DISTRO=jazzy` before loading the environment below. Load only one ROS distribution per terminal.
+After installation and build, run the matching group in every fresh terminal.
+
+**Humble (Ubuntu 22.04)**:
 
 ```bash
-source "/opt/ros/${LINKERBOT_ROS_DISTRO}/setup.bash"
-source "$HOME/venvs/linkerbot-hand-${ROS_DISTRO}/bin/activate"
-source "$HOME/linkerbot_${ROS_DISTRO}_ws/install/setup.bash"
+export LINKERBOT_ROS_DISTRO=humble
+source /opt/ros/humble/setup.bash
+source ~/venvs/linkerbot-hand-humble/bin/activate
+source ~/linkerbot_humble_ws/install/setup.bash
 ```
+
+**Jazzy (Ubuntu 24.04)**:
+
+```bash
+export LINKERBOT_ROS_DISTRO=jazzy
+source /opt/ros/jazzy/setup.bash
+source ~/venvs/linkerbot-hand-jazzy/bin/activate
+source ~/linkerbot_jazzy_ws/install/setup.bash
+```
+
+Check with `echo "$ROS_DISTRO"` and `python --version`: expect `humble` / Python 3.10
+or `jazzy` / Python 3.12. Load only one distribution per terminal. Open a fresh
+terminal when switching, and keep separate venvs, workspaces and build outputs.
+After loading either environment, use the same driver and state commands below.
 
 For O6 visualization, follow [O6 GUI](gui.md) to prepare model assets. Command-line use needs no model assets.
 
