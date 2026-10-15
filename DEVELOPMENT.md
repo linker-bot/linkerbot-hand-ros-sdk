@@ -1,6 +1,6 @@
 # 本地开发检查
 
-先按[安装](../linkerbot_hand_ros/docs/zh/getting_started.md)或[更新](../linkerbot_hand_ros/docs/zh/update.md)
+先按[安装](linkerbot_hand_ros/docs/zh/quick_start.md)或[更新](linkerbot_hand_ros/docs/zh/update.md)
 准备 Transport、Hand Python 和 ROS 的最新 `main`，构建消息包及所有消费者。
 依赖源码更新后重新构建，不从另一 Python 环境借用已生成的 ROSIDL 类型。
 
@@ -30,7 +30,7 @@ ruff format --check .
 并避免与其他测试任务重叠。探测仅检查启动窗口，不能阻止其他进程随后加入。
 
 测试使用替身/内存协议验证软件行为；适配器通信、真实受压响应和机械动作需要对应硬件验证。
-命令发送、完整触觉与 ROS 发布频率的测试方法见[频率测试](../linkerbot_hand_ros/docs/zh/frequency_benchmark.md)。
+命令发送、完整触觉与 ROS 发布频率的测试方法见[频率测试](linkerbot_hand_ros/docs/zh/frequency_benchmark.md)。
 变更记录通过 Git 历史及对应 PR 查看。
 
 ## Docker 验证 Humble 与 Jazzy
@@ -39,9 +39,9 @@ ruff format --check .
 Hand Python 的最新 `main` 源码；无需在宿主机安装 ROS 或 Python 依赖。在本仓库根目录运行：
 
 ```bash
-bash scripts/docker/run.sh humble \
+bash tests/docker/run.sh humble \
   "$HOME/linkerbot_deps/linkerbot-transport" "$HOME/linkerbot_deps/linkerbot-hand"
-bash scripts/docker/run.sh jazzy \
+bash tests/docker/run.sh jazzy \
   "$HOME/linkerbot_deps/linkerbot-transport" "$HOME/linkerbot_deps/linkerbot-hand"
 ```
 
@@ -53,7 +53,7 @@ bash scripts/docker/run.sh jazzy \
 测试容器使用本机发现，默认域号 87；可在运行前设置 `ROS_DOMAIN_ID` 更换基础域号，
 同样会检查是否已有其他 ROS 节点。
 
-若已按 [GUI 资源准备](../linkerbot_hand_gui/README.md#准备模型资源)下载完整模型，
+若已按 [GUI 资源准备](linkerbot_hand_gui/README.md#准备模型资源)下载完整模型，
 运行前设置 `export LINKERBOT_HAND_ASSETS_ROOT=/实际路径/linker-sim-assets`，脚本会将
 该目录只读挂载并执行资源测试；未提供时会明确跳过 4 项外部资源测试。
 Jazzy 测试容器将 Fast DDS 设置为 UDPv4。生命周期启动和域占用检查在独立

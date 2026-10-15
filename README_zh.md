@@ -1,5 +1,7 @@
 # Linkerbot Hand ROS 2
 
+[English](README.md) | 简体中文
+
 本仓库包含三个可由 ROS 2 独立发现的 package：
 
 - [`linkerbot_hand_msgs`](./linkerbot_hand_msgs)：类型化消息和服务。
@@ -7,8 +9,6 @@
 - [`linkerbot_hand_gui`](./linkerbot_hand_gui)：O6 URDF 关节滑块预览和安全控制桥。
 
 ## 快速启动
-
-[English](README.md)
 
 Ubuntu 22.04 使用 ROS 2 Humble，Ubuntu 24.04 使用 Jazzy；依赖和本仓库使用最新
 `main`。使用对应的系统 Python，各 ROS 发行版使用独立工作空间。

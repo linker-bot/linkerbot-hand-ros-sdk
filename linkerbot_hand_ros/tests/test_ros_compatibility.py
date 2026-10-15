@@ -266,7 +266,7 @@ def test_rosdep_instructions_fail_on_unresolved_dependencies() -> None:
     documentation = tuple(
         PACKAGE_ROOT / "docs" / language / name
         for language in ("", "zh")
-        for name in ("getting_started.md", "update.md")
+        for name in ("quick_start.md", "update.md")
     )
 
     for path in documentation:
@@ -282,8 +282,7 @@ def test_rosdep_instructions_fail_on_unresolved_dependencies() -> None:
 
 def test_sdk_install_instructions_use_main_sources() -> None:
     documentation = tuple(
-        PACKAGE_ROOT / "docs" / language / "getting_started.md"
-        for language in ("", "zh")
+        PACKAGE_ROOT / "docs" / language / "quick_start.md" for language in ("", "zh")
     )
 
     for path in documentation:
@@ -337,7 +336,4 @@ def test_python_and_ros_package_versions_match() -> None:
         == messages_package_version.group(1)
         == module_version.group(1)
     )
-    # The invariant is that the four declarations agree, not that they hold a
-    # particular value. Asserting the literal here meant editing this test every
-    # release; ``scripts/release.py`` reads the version and gates the release on
-    # it instead.
+    # Keep all four version declarations consistent without fixing their value.

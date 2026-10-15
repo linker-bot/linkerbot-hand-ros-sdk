@@ -1,5 +1,7 @@
 # Linkerbot Hand ROS 2
 
+English | [简体中文](README_zh.md)
+
 This repository contains three independently discoverable ROS 2 packages:
 
 - [`linkerbot_hand_msgs`](./linkerbot_hand_msgs): typed messages and services.
@@ -8,8 +10,6 @@ This repository contains three independently discoverable ROS 2 packages:
   ROS 2 control bridge.
 
 ## Quick Start
-
-[简体中文](README_zh.md)
 
 Use ROS 2 Humble on Ubuntu 22.04 or Jazzy on Ubuntu 24.04, with the latest `main`
 of Transport, Hand Python and this repository. Use the matching system Python

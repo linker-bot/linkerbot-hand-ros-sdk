@@ -21,5 +21,5 @@ RUN python3 -m venv --system-site-packages /venv \
     && /venv/bin/python -m pip install --upgrade pip \
     && /venv/bin/python -m pip install --upgrade pytest
 
-COPY scripts/docker/verify.sh /usr/local/bin/verify-hand-ros
+COPY tests/docker/verify.sh /usr/local/bin/verify-hand-ros
 ENTRYPOINT ["/bin/bash", "/usr/local/bin/verify-hand-ros"]

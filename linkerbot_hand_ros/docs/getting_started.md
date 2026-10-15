@@ -7,7 +7,13 @@
 
 ## Quick start
 
-[Quick start](quick_start.md): install Python dependencies and ROS packages, connect one hand and read its first angles. Use ROS 2 Humble on Ubuntu 22.04 or Jazzy on Ubuntu 24.04.
+[Quick start](quick_start.md): install Python dependencies and ROS packages, connect one hand and read its first angles.
+
+- Ubuntu 22.04 / Python 3.10: use [Humble](quick_start.md#ubuntu-2204-humble).
+- Ubuntu 24.04 / Python 3.12: use [Jazzy](quick_start.md#ubuntu-2404-jazzy).
+
+Both use the same `main` sources and ROS interfaces. Install and build for your distribution,
+then [load its environment](quick_start.md#4-load-each-terminal) before following the connection and feature guides below.
 
 ## Connect devices
 

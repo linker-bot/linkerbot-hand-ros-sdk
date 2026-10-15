@@ -22,8 +22,8 @@ fi
 mkdir -p /workspace/src/linkerbot-hand-ros /dependencies-src/transport /dependencies-src/hand
 # Work on container-local copies; mounted source trees remain read-only.
 tar -C /sources/ros --exclude='__pycache__' --exclude='*.egg-info' -cf - \
-  linkerbot_hand_msgs linkerbot_hand_ros linkerbot_hand_gui scripts pyproject.toml \
-  README.md README_zh.md | tar -C /workspace/src/linkerbot-hand-ros -xf -
+  linkerbot_hand_msgs linkerbot_hand_ros linkerbot_hand_gui tests pyproject.toml \
+  README.md README_zh.md DEVELOPMENT.md | tar -C /workspace/src/linkerbot-hand-ros -xf -
 for dependency in transport hand; do
   tar -C "/sources/${dependency}" --exclude='.git' --exclude='.venv' \
     --exclude='__pycache__' --exclude='*.egg-info' -cf - . \

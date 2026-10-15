@@ -5,7 +5,7 @@
 !linkerbot_hand_ros/package.xml
 !linkerbot_hand_gui/
 !linkerbot_hand_gui/package.xml
-!scripts/
-!scripts/docker/
-!scripts/docker/Dockerfile
-!scripts/docker/verify.sh
+!tests/
+!tests/docker/
+!tests/docker/Dockerfile
+!tests/docker/verify.sh
