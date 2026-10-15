@@ -1,11 +1,8 @@
 from glob import glob
-from pathlib import Path
 
 from setuptools import find_packages, setup
 
 PACKAGE_NAME = "linkerbot_hand_ros"
-LONG_DESCRIPTION = Path(__file__).with_name("README.md").read_text(encoding="utf-8")
-
 
 setup(
     name=PACKAGE_NAME,
@@ -33,27 +30,7 @@ setup(
     maintainer="zhuzhixiang",
     maintainer_email="1849346915@qq.com",
     description="ROS 2 driver for Linkerbot dexterous hands",
-    long_description=LONG_DESCRIPTION,
-    long_description_content_type="text/markdown",
     license="Apache-2.0",
-    url="https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand-ros",
-    project_urls={
-        "Documentation": (
-            "https://gitea.linkerhub.work/zhuzhixiang/"
-            "linkerbot-hand-ros/src/branch/main/linkerbot_hand_ros/README_zh.md"
-        ),
-        "Repository": ("https://gitea.linkerhub.work/zhuzhixiang/linkerbot-hand-ros"),
-    },
-    classifiers=[
-        "Development Status :: 5 - Production/Stable",
-        "Intended Audience :: Developers",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3 :: Only",
-        "Programming Language :: Python :: 3.10",
-        "Programming Language :: Python :: 3.11",
-        "Programming Language :: Python :: 3.12",
-        "Programming Language :: Python :: 3.13",
-    ],
     entry_points={
         "console_scripts": [
             "hand_node = linkerbot_hand_ros.node:main",

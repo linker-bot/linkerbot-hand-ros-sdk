@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ros_distro=${1:?Usage: bash scripts/docker/run.sh humble|jazzy TRANSPORT_SOURCE HAND_SOURCE}
+ros_distro=${1:?Usage: bash tests/docker/run.sh humble|jazzy TRANSPORT_SOURCE HAND_SOURCE}
 case "$ros_distro" in
   humble|jazzy) ;;
   *) echo "Supported distributions: humble, jazzy" >&2; exit 2 ;;
@@ -27,7 +27,7 @@ fi
 docker build --network "${ROS_TEST_BUILD_NETWORK:-default}" \
   --build-arg HTTP_PROXY --build-arg HTTPS_PROXY --build-arg NO_PROXY \
   --build-arg "ROS_IMAGE=${base_image}" \
-  -f "${repo_root}/scripts/docker/Dockerfile" -t "$test_image" "$repo_root"
+  -f "${repo_root}/tests/docker/Dockerfile" -t "$test_image" "$repo_root"
 docker run --rm --init \
   --env "EXPECTED_ROS_DISTRO=${ros_distro}" \
   --env "ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-87}" \
