@@ -4,7 +4,7 @@
   <version>2.0.0</version>
   <description>ROS 2 driver for Linkerbot dexterous hands.</description>
   <maintainer email="1849346915@qq.com">zhuzhixiang</maintainer>
-  <license>Apache-2.0</license>
+  <license>MIT</license>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend version_gte="2.0.0" version_lt="3.0.0">linkerbot_hand_msgs</exec_depend>

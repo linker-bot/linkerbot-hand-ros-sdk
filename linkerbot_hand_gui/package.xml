@@ -4,7 +4,7 @@
   <version>0.1.0</version>
   <description>O6 URDF slider preview and safe ROS 2 hand control bridge.</description>
   <maintainer email="1849346915@qq.com">zhuzhixiang</maintainer>
-  <license>Apache-2.0</license>
+  <license>MIT</license>
 
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>builtin_interfaces</exec_depend>
