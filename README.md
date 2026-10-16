@@ -37,3 +37,14 @@ The O6 URDF slider GUI is documented in
 [`linkerbot_hand_gui/README.md`](./linkerbot_hand_gui/README.md). It uses the
 URDF and meshes from `linker-sim-assets`; install Git LFS and set
 `LINKERBOT_HAND_ASSETS_ROOT` before launching it.
+
+Project-specific validation commands are documented in [Development checks](DEVELOPMENT.md).
+
+## Contributing and license
+
+English and Chinese contributions are welcome. Follow the
+[Linkerbot contribution guide](https://github.com/linker-bot/.github/blob/main/CONTRIBUTING.md).
+Report vulnerabilities privately using the
+[organization security policy](https://github.com/linker-bot/.github/blob/main/SECURITY.md).
+
+Licensed under the [MIT License](LICENSE).

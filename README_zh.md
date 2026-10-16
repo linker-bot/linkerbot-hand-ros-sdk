@@ -34,3 +34,12 @@ Ubuntu 22.04 使用 ROS 2 Humble，Ubuntu 24.04 使用 Jazzy；依赖和本仓�
 O6 的 URDF 关节滑块 GUI 见[`linkerbot_hand_gui/README.md`](./linkerbot_hand_gui/README.md)。
 它使用 `linker-sim-assets` 中的 URDF 和 mesh，启动前请安装 Git LFS 并设置
 `LINKERBOT_HAND_ASSETS_ROOT`。
+
+项目专属的验证命令见[开发检查](DEVELOPMENT.md)。
+
+## 贡献与许可证
+
+欢迎用中文或英文参与贡献，请遵循[Linkerbot 贡献指南](https://github.com/linker-bot/.github/blob/main/CONTRIBUTING.md)。
+安全问题请按[组织安全策略](https://github.com/linker-bot/.github/blob/main/SECURITY.md)私下报告。
+
+本项目采用 [MIT 许可证](LICENSE)。
