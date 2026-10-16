@@ -10,7 +10,7 @@ setup(
         ("share/ament_index/resource_index/packages", [f"resource/{PACKAGE_NAME}"]),
         (
             f"share/{PACKAGE_NAME}",
-            ["package.xml", "README.md"],
+            ["package.xml", "LICENSE", "README.md"],
         ),
         (f"share/{PACKAGE_NAME}/launch", ["launch/hand_gui.launch.py"]),
         (f"share/{PACKAGE_NAME}/config", ["config/o6.rviz", "config/o6_preview.rviz"]),
@@ -22,7 +22,8 @@ setup(
     maintainer="zhuzhixiang",
     maintainer_email="1849346915@qq.com",
     description="O6 URDF slider preview and safe ROS 2 hand control bridge",
-    license="Apache-2.0",
+    license="MIT",
+    license_files=["LICENSE"],
     url="https://github.com/linker-bot/linkerbot-hand-ros-sdk",
     tests_require=["pytest"],
     entry_points={

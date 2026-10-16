@@ -12,7 +12,7 @@ setup(
         ("share/ament_index/resource_index/packages", [f"resource/{PACKAGE_NAME}"]),
         (
             f"share/{PACKAGE_NAME}",
-            ["package.xml", "README.md", "README_zh.md"],
+            ["package.xml", "LICENSE", "README.md", "README_zh.md"],
         ),
         (f"share/{PACKAGE_NAME}/launch", glob("launch/*.launch.py")),
         (f"share/{PACKAGE_NAME}/config", glob("config/*.yaml")),
@@ -30,7 +30,8 @@ setup(
     maintainer="zhuzhixiang",
     maintainer_email="1849346915@qq.com",
     description="ROS 2 driver for Linkerbot dexterous hands",
-    license="Apache-2.0",
+    license="MIT",
+    license_files=["LICENSE"],
     entry_points={
         "console_scripts": [
             "hand_node = linkerbot_hand_ros.node:main",
