@@ -13,7 +13,7 @@ URDF、decoder 和 mesh 来自 [linker-sim-assets](https://github.com/linker-bot
 ```bash
 sudo apt install -y git-lfs
 git lfs install
-git clone https://github.com/linker-bot/linker-sim-assets.git ~/linker-sim-assets
+git clone --branch main https://github.com/linker-bot/linker-sim-assets.git ~/linker-sim-assets
 git -C ~/linker-sim-assets lfs pull
 export LINKERBOT_HAND_ASSETS_ROOT=~/linker-sim-assets/src/linker_robot_assets/assets
 ```
